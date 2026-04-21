@@ -383,10 +383,15 @@ const CHANNELS    = 2;
 function setPreroll(val) {
   PRE_ROLL = parseInt(val);
   MAX_RING_CHUNKS_DYN = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
-  // Mise à jour du sous-titre si un stream est sélectionné
+  // Mise à jour du sous-titre
   if (currentStream) {
     document.getElementById('headerSub').textContent =
       currentStream.sub.replace(/pre-roll \d+s/, 'pre-roll ' + PRE_ROLL + 's');
+  }
+  // Mise à jour du message de statut si déjà prêt
+  const statusTxt = document.getElementById('statusText').textContent;
+  if (statusTxt.startsWith('Pré-roll prêt')) {
+    setStatus('ready', 'Pré-roll prêt (' + PRE_ROLL + 's) — prêt à capturer');
   }
   log('Pré-roll → ' + PRE_ROLL + 's');
 }
