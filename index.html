@@ -884,7 +884,7 @@ let postTarget    = 0;
 let MAX_RING_DYN  = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
 
 let currentStream = null, pendingSwitch = null, switchTmt = null;
-let isBuffering = false, isCapturing = false, isMuted = false;
+let isBuffering = false, isCapturing = false, isMuted = false, isEncoding = false;
 let lameReady = false;
 
 let audioCtx, analyser, dataArray, monitorGain, scriptProcessor, audioEl, srcNode, streamAbort;
@@ -1163,7 +1163,7 @@ async function startStream() {
 
 // ── Capture ───────────────────────────────────────────────────────────────────
 function triggerCapture() {
-  if (isCapturing) return;
+  if (isCapturing || isEncoding) return;
 
   isCapturing = true;
   captureSnapshot = ringPCM.slice();
@@ -1225,8 +1225,8 @@ function encodeMp3(chunks) {
 }
 
 function finalize() {
-  // Peut être appelée depuis stopCapture (isCapturing déjà false) ou timer auto
   isCapturing = false;
+  isEncoding  = true;  // bloque tout nouveau déclenchement pendant l'encodage
   if (recInterval) { clearInterval(recInterval); recInterval = null; }
   document.getElementById('btnStopCap').disabled = true;
   document.getElementById('btnTrigger').disabled = true;
@@ -1234,6 +1234,8 @@ function finalize() {
   setStatus('done', 'Encodage MP3...');
   const allChunks = captureSnapshot.concat(capturePCM);
   captureSnapshot = []; capturePCM = [];
+
+  // Laisser le navigateur respirer 100ms avant l'encodage bloquant
   setTimeout(() => {
     try {
       const blob = encodeMp3(allChunks);
@@ -1251,10 +1253,18 @@ function finalize() {
       list.insertBefore(item, list.firstChild);
       setStatus('done', 'Clip prêt — ' + (blob.size / 1024 / 1024).toFixed(1) + ' MB');
       log('Enregistré — ' + filename + ' (' + sizekb + ' KB · ' + total + ')');
-      setCapButtons(true, false);
+    } catch(err) {
+      setStatus('error', 'Erreur encodage: ' + err.message);
+      log('Erreur: ' + err.message);
+    } finally {
+      isEncoding = false;  // libérer dans tous les cas
+      // Remettre Capturer disponible seulement si le stream est encore actif
+      if (isBuffering) {
+        document.getElementById('btnTrigger').disabled = false;
+      }
       document.getElementById('progressBar').style.width = '100%';
-    } catch(err) { setStatus('error', 'Erreur encodage: ' + err.message); log('Erreur: ' + err.message); }
-  }, 50);
+    }
+  }, 100);
 }
 
 // ── Mute ──────────────────────────────────────────────────────────────────────
@@ -1280,7 +1290,7 @@ function teardown() {
   try { if (audioCtx)        { audioCtx.close();            audioCtx = null;       } } catch(e) {}
   try { if (prerollInterval) { clearInterval(prerollInterval); prerollInterval = null; } } catch(e) {}
   stopVU();
-  isBuffering = false; isMuted = false;
+  isBuffering = false; isMuted = false; isEncoding = false; isCapturing = false;
   ringPCM = []; capturePCM = []; captureSnapshot = [];
   setCapButtons(false, false);
   showStreamControls(false);
