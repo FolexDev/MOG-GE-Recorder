@@ -312,6 +312,16 @@
     }
 
     .btn.mute.active { border-color: #f5a000; color: #f5a000; background: rgba(245,160,0,0.06); }
+
+    /* Bouton Stopper actif */
+    #btnStopCap:not(:disabled) {
+      border-color: #dc0814;
+      color: #dc0814;
+      background: rgba(220,8,20,0.08);
+    }
+    #btnStopCap:not(:disabled):hover {
+      background: rgba(220,8,20,0.15);
+    }
     .btn kbd {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 8px;
@@ -919,8 +929,17 @@ function showStreamControls(show) {
 }
 
 function setCapButtons(capEn, stopEn) {
-  document.getElementById('btnTrigger').disabled = !capEn;
-  document.getElementById('btnStopCap').disabled = !stopEn;
+  const bt = document.getElementById('btnTrigger');
+  const bs = document.getElementById('btnStopCap');
+  if (bt) {
+    bt.disabled = !capEn;
+    // Forcer le recalcul du style
+    bt.offsetHeight;
+  }
+  if (bs) {
+    bs.disabled = !stopEn;
+    bs.offsetHeight;
+  }
 }
 
 // ── Pad / switch ───────────────────────────────────────────────────────────────
@@ -1034,10 +1053,20 @@ async function fetchAndStream(url, ctx, sp, sig) {
 function rms(f32) { let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i]; return Math.sqrt(s / f32.length); }
 
 // ── onChunk ───────────────────────────────────────────────────────────────────
+const MAX_CAP_CHUNKS = Math.ceil((SAMPLE_RATE * 1800) / BUFFER_SIZE); // 30 min max
+
 const onChunk = (L, R) => {
   const c = { L: new Float32Array(L), R: new Float32Array(R) };
   ringPCM.push(c); if (ringPCM.length > MAX_RING_DYN) ringPCM.shift();
-  if (isCapturing) capturePCM.push(c);
+  if (isCapturing) {
+    capturePCM.push(c);
+    // Sécurité : si enregistrement trop long, on arrête automatiquement
+    if (capturePCM.length > MAX_CAP_CHUNKS) {
+      clearInterval(recInterval);
+      log('Limite 30 min atteinte — finalisation automatique');
+      finalize();
+    }
+  }
   const rL = rms(c.L), rR = rms(c.R);
   if (rL > peakL) peakL = rL; if (rR > peakR) peakR = rR;
 };
@@ -1142,7 +1171,12 @@ async function startStream() {
 // ── Capture ───────────────────────────────────────────────────────────────────
 function triggerCapture() {
   if (isCapturing) return;
-  captureSnapshot = ringPCM.map(c => ({ L: new Float32Array(c.L), R: new Float32Array(c.R) }));
+  // Désactivation immédiate pour éviter double-déclenchement
+  const btnCap = document.getElementById('btnTrigger');
+  if (btnCap) btnCap.disabled = true;
+
+  // Snapshot du ring buffer : copie shallow instantanée
+  captureSnapshot = ringPCM.slice();
   snapshotSec = Math.round(captureSnapshot.length * BUFFER_SIZE / SAMPLE_RATE);
   capturePCM = []; isCapturing = true;
   setCapButtons(false, true);
@@ -1167,22 +1201,38 @@ function triggerCapture() {
   }, 1000);
 }
 
-function stopCapture() { if (!isCapturing) return; clearInterval(recInterval); finalize(); }
+function stopCapture() {
+  if (!isCapturing) return;
+  // Désactivation immédiate
+  const bs = document.getElementById('btnStopCap'); if (bs) bs.disabled = true;
+  clearInterval(recInterval);
+  finalize();
+}
 
 // ── Encodage MP3 ──────────────────────────────────────────────────────────────
 function encodeMp3(chunks) {
-  const enc = new lamejs.Mp3Encoder(CHANNELS, SAMPLE_RATE, BITRATE); const data = [];
-  for (const c of chunks) { const e = enc.encodeBuffer(f32ToI16(c.L), f32ToI16(c.R)); if (e.length > 0) data.push(new Uint8Array(e)); }
-  const f = enc.flush(); if (f.length > 0) data.push(new Uint8Array(f));
+  const enc = new lamejs.Mp3Encoder(CHANNELS, SAMPLE_RATE, BITRATE);
+  const data = [];
+  // Traitement par batch de 50 chunks pour éviter les microfreezes
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const e = enc.encodeBuffer(f32ToI16(chunk.L), f32ToI16(chunk.R));
+    if (e.length > 0) data.push(new Uint8Array(e));
+  }
+  const f = enc.flush();
+  if (f.length > 0) data.push(new Uint8Array(f));
   return new Blob(data, { type: 'audio/mpeg' });
 }
 
 function finalize() {
   isCapturing = false; setCapButtons(false, false); setStatus('done', 'Encodage MP3...');
   const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
+  // Libérer la mémoire immédiatement avant l'encodage
+  const allChunks = captureSnapshot.concat(capturePCM);
+  captureSnapshot = []; capturePCM = [];
   setTimeout(() => {
     try {
-      const blob = encodeMp3([...captureSnapshot, ...capturePCM]);
+      const blob = encodeMp3(allChunks);
       const prefix = currentStream ? currentStream.prefix : 'capture';
       const ds = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const filename = prefix + '_' + ds + '.mp3';
