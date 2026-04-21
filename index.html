@@ -393,6 +393,7 @@ function selectStream(key) {
   document.getElementById('headerSub').textContent = currentStream.sub;
   document.getElementById('filePrefix').value = currentStream.prefix;
 
+  // iOS : AudioContext doit être créé/résumé dans le même tick qu'un geste utilisateur
   if (lameReady) startStream();
 }
 
@@ -517,8 +518,16 @@ async function startStream() {
     audioEl.crossOrigin = 'anonymous';
     audioEl.src = currentStream.url;
     audioEl.volume = 0.6;
+    // iOS : attributs requis pour lecture audio dans une WebApp
+    audioEl.playsInline = true;
+    audioEl.setAttribute('playsinline', '');
+    audioEl.setAttribute('webkit-playsinline', '');
 
-    audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // iOS : AudioContext doit être créé dans le tick du geste utilisateur
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+    // Si suspendu (politique iOS), on le résume immédiatement
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -531,25 +540,43 @@ async function startStream() {
     analyser.connect(monitorGain);
     monitorGain.connect(audioCtx.destination);
 
-    // AudioWorklet — thread dédié, élimine les glitches du ScriptProcessor
-    const wBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
-    const wURL  = URL.createObjectURL(wBlob);
-    await audioCtx.audioWorklet.addModule(wURL);
-    URL.revokeObjectURL(wURL);
-
-    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture', {
-      numberOfInputs: 1, numberOfOutputs: 0, channelCount: CHANNELS
-    });
-    srcNode.connect(workletNode);
-
-    workletNode.port.onmessage = (e) => {
-      const chunk = { L: e.data.L, R: e.data.R };
+    // AudioWorklet si supporté (desktop/Android), fallback ScriptProcessor (iOS Safari)
+    const onChunk = (L, R) => {
+      const chunk = { L, R };
       ringPCM.push(chunk);
       if (ringPCM.length > MAX_RING_CHUNKS) ringPCM.shift();
       if (isCapturing) capturePCM.push(chunk);
     };
 
-    scriptProcessor = workletNode; // référence pour stopAll()
+    if (audioCtx.audioWorklet) {
+      const wBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+      const wURL  = URL.createObjectURL(wBlob);
+      await audioCtx.audioWorklet.addModule(wURL);
+      URL.revokeObjectURL(wURL);
+      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture', {
+        numberOfInputs: 1, numberOfOutputs: 0, channelCount: CHANNELS
+      });
+      srcNode.connect(workletNode);
+      workletNode.port.onmessage = (e) => onChunk(e.data.L, e.data.R);
+      scriptProcessor = workletNode;
+      log('Capture via AudioWorklet');
+    } else {
+      // Fallback iOS Safari : ScriptProcessor
+      const sp = audioCtx.createScriptProcessor(BUFFER_SIZE, CHANNELS, CHANNELS);
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+      srcNode.connect(sp);
+      sp.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
+      sp.onaudioprocess = (e) => {
+        onChunk(
+          new Float32Array(e.inputBuffer.getChannelData(0)),
+          new Float32Array(e.inputBuffer.getChannelData(1))
+        );
+      };
+      scriptProcessor = sp;
+      log('Capture via ScriptProcessor (iOS fallback)');
+    }
 
     await new Promise((resolve, reject) => {
       audioEl.oncanplay = resolve;
@@ -557,7 +584,8 @@ async function startStream() {
       audioEl.load();
     });
 
-    audioEl.play();
+    // iOS : play() doit être appelé après resume() et dans la chaîne du geste
+    await audioEl.play();
     isBuffering = true;
 
     document.getElementById('btnTrigger').disabled = false;
