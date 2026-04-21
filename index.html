@@ -169,6 +169,8 @@
     .seg.o.lit  { background: #ff7700; box-shadow: 0 0 4px rgba(255,119,0,0.55); }
     .seg.r  { background: #2a1212; }
     .seg.r.lit  { background: #ff2222; box-shadow: 0 0 5px rgba(255,34,34,0.65); }
+    /* VU muted → gris */
+    .seg.lit.muted { background: #50505a !important; box-shadow: none !important; }
 
     .vu-ruler {
       position: absolute;
@@ -299,9 +301,9 @@
     .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
     .btn.capture {
-      background: linear-gradient(180deg, #c00610 0%, #8c040c 100%);
-      color: #fff; border-color: #600308;
-      box-shadow: 0 0 16px rgba(200,6,16,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, var(--cap-hi, #c00610) 0%, var(--cap-lo, #8c040c) 100%);
+      color: #fff; border-color: var(--cap-border, #600308);
+      box-shadow: 0 0 16px var(--cap-glow, rgba(200,6,16,0.3)), inset 0 1px 0 rgba(255,255,255,0.08);
     }
     .btn.capture:hover { filter: brightness(1.12); }
     .btn.capture:disabled {
@@ -344,6 +346,91 @@
       line-height: 1.5;
     }
     .notice code { background: rgba(245,160,0,0.1); padding: 1px 4px; border-radius: 2px; }
+
+    /* ── VU + Mute row ── */
+    .vu-mute-row {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .vu-wrap {
+      flex: 1;
+    }
+
+    /* ── Bouton Mute console ── */
+    .mute-btn-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mute-btn {
+      width: 44px;
+      height: 100%;
+      min-height: 52px;
+      background: linear-gradient(180deg, #1e2028 0%, #16181e 100%);
+      border: 1px solid #2e3240;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 6px 4px;
+      transition: all 0.08s;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        inset 0 -2px 0 rgba(0,0,0,0.4),
+        0 2px 6px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .mute-btn::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 40%;
+      background: rgba(255,255,255,0.025);
+      border-radius: 4px 4px 0 0;
+    }
+    .mute-btn:active {
+      transform: translateY(1px);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+    }
+    /* Voyant LED */
+    .mute-led {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #1a1c22;
+      border: 1px solid #0a0b0e;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+      flex-shrink: 0;
+      transition: all 0.1s;
+    }
+    .mute-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 6px;
+      font-weight: 500;
+      color: #404860;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.2;
+      user-select: none;
+    }
+    /* État actif (muté) */
+    .mute-btn.muted {
+      background: linear-gradient(180deg, #221e10 0%, #181408 100%);
+      border-color: #f5a000;
+    }
+    .mute-btn.muted .mute-led {
+      background: #f5a000;
+      border-color: #c07800;
+      box-shadow: 0 0 6px rgba(245,160,0,0.8), 0 0 12px rgba(245,160,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .mute-btn.muted .mute-label {
+      color: #f5a000;
+    }
   </style>
 </head>
 <body>
@@ -373,17 +460,25 @@
       </button>
     </div>
 
-    <!-- VU Meter -->
-    <div class="vu-wrap">
-      <div class="vu-ch">
-        <div class="vu-lbl">L</div>
-        <div class="vu-track" id="vuL"></div>
+    <!-- VU Meter + Mute -->
+    <div class="vu-mute-row">
+      <div class="vu-wrap">
+        <div class="vu-ch">
+          <div class="vu-lbl">L</div>
+          <div class="vu-track" id="vuL"></div>
+        </div>
+        <div class="vu-ch">
+          <div class="vu-lbl">R</div>
+          <div class="vu-track" id="vuR"></div>
+        </div>
+        <div class="vu-ruler" id="vuRuler"></div>
       </div>
-      <div class="vu-ch">
-        <div class="vu-lbl">R</div>
-        <div class="vu-track" id="vuR"></div>
+      <div class="mute-btn-wrap">
+        <button class="mute-btn" id="btnMuteConsole" onclick="toggleMute()">
+          <div class="mute-led" id="muteLed"></div>
+          <div class="mute-label">MUTE</div>
+        </button>
       </div>
-      <div class="vu-ruler" id="vuRuler"></div>
     </div>
 
     <!-- Progress -->
@@ -508,7 +603,7 @@
       <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer</button>
       <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper</button>
       <button class="btn full"    id="btnStop"    onclick="doStop()"  style="display:none">⏹ Arrêter le stream</button>
-      <button class="btn mute"    id="btnMute"    onclick="toggleMute()" style="display:none">🔇 Mute</button>
+      <!-- btnMute remplacé par bouton console dans le VU mètre -->
     </div>
 
     <!-- Log -->
@@ -586,8 +681,15 @@ function rmsToSeg(rms) {
 function paintVU(rL, rR) {
   [['vuL', rmsToSeg(rL)], ['vuR', rmsToSeg(rR)]].forEach(([id, n]) => {
     const segs = document.getElementById(id).children;
-    for (let i = 0; i < segs.length; i++)
-      i < n ? segs[i].classList.add('lit') : segs[i].classList.remove('lit');
+    for (let i = 0; i < segs.length; i++) {
+      if (i < n) {
+        segs[i].classList.add('lit');
+        segs[i].classList.toggle('muted', isMuted);
+      } else {
+        segs[i].classList.remove('lit');
+        segs[i].classList.remove('muted');
+      }
+    }
   });
 }
 
@@ -787,7 +889,7 @@ function log(t) { document.getElementById('logLine').textContent = t; }
 
 function showStreamControls(show) {
   document.getElementById('btnStop').style.display = show ? 'flex' : 'none';
-  document.getElementById('btnMute').style.display = show ? 'flex' : 'none';
+  // btnMute est maintenant le bouton console dans le VU mètre (toujours visible)
 }
 
 function setCapButtons(capEn, stopEn) {
@@ -823,6 +925,19 @@ function applyStream(key) {
   updatePads(key);
   document.getElementById('headerSub').textContent = currentStream.sub.replace(/pre-roll \d+s/, 'pre-roll ' + PRE_ROLL + 's');
   document.getElementById('filePrefix').value = currentStream.prefix;
+  // Couleur du bouton Capturer = couleur du stream
+  const r = document.documentElement.style;
+  if (key === 'onefm') {
+    r.setProperty('--cap-hi',     '#c00610');
+    r.setProperty('--cap-lo',     '#8c040c');
+    r.setProperty('--cap-border', '#600308');
+    r.setProperty('--cap-glow',   'rgba(200,6,16,0.3)');
+  } else {
+    r.setProperty('--cap-hi',     '#2ab8be');
+    r.setProperty('--cap-lo',     '#1a7e82');
+    r.setProperty('--cap-border', '#104e52');
+    r.setProperty('--cap-glow',   'rgba(42,184,190,0.3)');
+  }
   if (lameReady) startStream();
 }
 
@@ -968,7 +1083,7 @@ async function startStream() {
     }
 
     isBuffering = true;
-    setCapButtons(false, false);
+    setCapButtons(true, false);
     showStreamControls(true);
     startVU();
     document.getElementById('corsNotice').style.display = 'none';
@@ -1065,9 +1180,8 @@ function toggleMute() {
   if (!isBuffering) return;
   isMuted = !isMuted;
   if (monitorGain) monitorGain.gain.value = isMuted ? 0 : 1.0;
-  const btn = document.getElementById('btnMute');
-  btn.textContent = isMuted ? '🔊 Unmute' : '🔇 Mute';
-  isMuted ? btn.classList.add('active') : btn.classList.remove('active');
+  const btn = document.getElementById('btnMuteConsole');
+  if (btn) isMuted ? btn.classList.add('muted') : btn.classList.remove('muted');
 }
 
 // ── Teardown ──────────────────────────────────────────────────────────────────
@@ -1089,8 +1203,8 @@ function teardown() {
   pre.textContent = '00:00'; pre.className = 'timer-val';
   const rec = document.getElementById('recDisplay');
   rec.textContent = '—:——'; rec.className = 'timer-val';
-  const bm = document.getElementById('btnMute');
-  bm.textContent = '🔇 Mute'; bm.classList.remove('active');
+  const bm = document.getElementById('btnMuteConsole');
+  if (bm) bm.classList.remove('muted');
   setStatus('', 'Arrêté');
   log('Stream déconnecté');
 }
