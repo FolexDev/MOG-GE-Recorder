@@ -428,6 +428,153 @@
     .dialog-btn.success { border-color: #00b896; background: rgba(0,184,150,0.08); color: #00b896; }
     .dialog-btn.success:hover { background: rgba(0,184,150,0.15); }
 
+
+    /* ── Audio Editor ── */
+    .editor {
+      background: #0e0f14;
+      border: 1px solid #22252e;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+    .editor.visible { display: block; }
+
+    .editor-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px; color: #6878a0; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 8px 12px 4px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .editor-filename {
+      color: #8090b8; font-size: 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+    }
+
+    /* Waveform */
+    .waveform-container {
+      position: relative;
+      height: 80px;
+      background: #090a0d;
+      cursor: crosshair;
+      overflow: hidden;
+    }
+    .waveform-container canvas {
+      display: block; width: 100%; height: 100%;
+    }
+    /* Région sélectionnée */
+    .wave-region {
+      position: absolute; top: 0; bottom: 0;
+      background: rgba(0,184,150,0.12);
+      border-left:  1px solid #00b896;
+      border-right: 1px solid #00b896;
+      pointer-events: none;
+      display: none;
+    }
+    /* Curseur de lecture */
+    .wave-cursor {
+      position: absolute; top: 0; bottom: 0;
+      width: 1px; background: #f5a000;
+      pointer-events: none;
+    }
+    /* Marqueurs start/end */
+    .wave-marker {
+      position: absolute; top: 0; bottom: 0;
+      width: 1px; pointer-events: none;
+    }
+    .wave-marker.start { background: #00b896; }
+    .wave-marker.end   { background: #dc0814; }
+    .wave-marker-lbl {
+      position: absolute; top: 3px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 7px;
+      padding: 1px 4px; border-radius: 2px;
+      line-height: 1;
+    }
+    .wave-marker.start .wave-marker-lbl { background: #00b896; color: #000; left: 2px; }
+    .wave-marker.end   .wave-marker-lbl { background: #dc0814; color: #fff; right: 2px; left: auto; }
+
+    /* Scrollbar zoom */
+    .wave-scrollbar {
+      height: 6px; background: #12141c;
+      border-top: 1px solid #1a1c22;
+      position: relative;
+      cursor: pointer;
+    }
+    .wave-scrollbar-thumb {
+      position: absolute; top: 1px; height: 4px;
+      background: #2e3240; border-radius: 2px;
+      cursor: grab;
+      transition: background 0.1s;
+    }
+    .wave-scrollbar-thumb:hover { background: #404860; }
+
+    /* Zoom controls */
+    .wave-zoom {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      border-top: 1px solid #12141c;
+      border-bottom: 1px solid #12141c;
+    }
+    .wave-zoom-lbl {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 7px; color: #404860; letter-spacing: 0.08em;
+    }
+    .wave-zoom-track {
+      flex: 1; height: 3px; background: #1a1c22;
+      border-radius: 2px; cursor: pointer; position: relative;
+    }
+    .wave-zoom-fill {
+      height: 100%; background: #00b896; border-radius: 2px;
+      transition: width 0.1s;
+    }
+    .wave-zoom-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 7px; color: #00b896; min-width: 28px; text-align: right;
+    }
+
+    /* Timecode */
+    .wave-timecodes {
+      height: 14px; background: #0a0b0e;
+      position: relative; overflow: hidden;
+    }
+    .wave-timecodes canvas { display: block; width: 100%; height: 100%; }
+
+    /* Transport */
+    .transport {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 10px;
+      flex-wrap: wrap;
+    }
+    .tr-time {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; color: #c8cdd8;
+      min-width: 70px; letter-spacing: 0.04em;
+    }
+    .tr-btn {
+      height: 32px;
+      border-radius: 5px;
+      border: 1px solid #2e3240; background: #1a1c24;
+      color: #6878a0;
+      font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+      cursor: pointer; transition: all 0.08s;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 10px; gap: 5px;
+      white-space: nowrap;
+    }
+    .tr-btn:hover  { background: #222530; color: #a0aac0; }
+    .tr-btn:active { transform: translateY(1px); }
+    .tr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .tr-btn.active { border-color: #00b896; color: #00b896; background: rgba(0,184,150,0.08); }
+    .tr-btn.set-start { border-color: rgba(0,184,150,0.4); color: #00b896; }
+    .tr-btn.set-end   { border-color: rgba(220,8,20,0.4);  color: #dc0814; }
+    .tr-btn.export    { border-color: #f5a000; color: #f5a000; background: rgba(245,160,0,0.07); }
+    .tr-btn.export:hover { background: rgba(245,160,0,0.14); }
+    .tr-sep { flex: 1; }
+    .tr-region-time {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px; color: #505668;
+      letter-spacing: 0.04em;
+    }
+
     .notice {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 9px; color: #f5a000;
@@ -706,6 +853,46 @@
     <div class="notice" id="corsNotice" style="display:none">
       ⚠ Erreur CORS — ouvre ce fichier via GitHub Pages ou un serveur local.<br>
       En local : <code>npx serve .</code> ou <code>python3 -m http.server</code>
+    </div>
+
+    <!-- Éditeur audio -->
+    <div class="editor" id="audioEditor">
+      <div class="editor-title">
+        <span>ÉDITEUR</span>
+        <span class="editor-filename" id="editorFilename">—</span>
+      </div>
+      <div class="wave-timecodes"><canvas id="waveTimecode"></canvas></div>
+      <div class="waveform-container" id="waveContainer">
+        <canvas id="waveEditor"></canvas>
+        <div class="wave-region" id="waveRegion"></div>
+        <div class="wave-cursor" id="waveCursor" style="left:0"></div>
+        <div class="wave-marker start" id="waveMarkerStart" style="display:none">
+          <span class="wave-marker-lbl">IN</span>
+        </div>
+        <div class="wave-marker end" id="waveMarkerEnd" style="display:none">
+          <span class="wave-marker-lbl">OUT</span>
+        </div>
+      </div>
+      <div class="wave-scrollbar" id="waveScrollbar">
+        <div class="wave-scrollbar-thumb" id="waveScrollThumb"></div>
+      </div>
+      <div class="wave-zoom">
+        <span class="wave-zoom-lbl">ZOOM</span>
+        <div class="wave-zoom-track" id="waveZoomTrack">
+          <div class="wave-zoom-fill" id="waveZoomFill" style="width:0%"></div>
+        </div>
+        <span class="wave-zoom-val" id="waveZoomVal">1×</span>
+      </div>
+      <div class="transport">
+        <span class="tr-time" id="trTime">00:00.0</span>
+        <button class="tr-btn" id="trRewind"  onclick="edRewind()" title="Début">⏮</button>
+        <button class="tr-btn" id="trPlay"    onclick="edPlayStop()" title="Play/Stop">▶</button>
+        <div class="tr-sep"></div>
+        <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN">IN</button>
+        <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT">OUT</button>
+        <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection" disabled>↓ Export</button>
+        <span class="tr-region-time" id="trRegionTime"></span>
+      </div>
     </div>
 
     <!-- Fichiers -->
@@ -1343,11 +1530,17 @@ function finalize() {
       // Garder max 10 items dans la liste
       while (list.children.length >= 10) list.removeChild(list.lastChild);
       const item = document.createElement('div'); item.className = 'file-item';
-      item.innerHTML = '<div><div class="file-name">'+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'">↓ DL</a>';
+      // Stocker le blob sur l'élément pour l'éditeur
+      const blobRef = blob;
+      const fnRef   = filename;
+      item.innerHTML = '<div style="cursor:pointer;flex:1" title="Ouvrir dans l'éditeur"><div class="file-name">▶ '+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'" onclick="event.stopPropagation()">↓ DL</a>';
+      item.querySelector('div[style]').addEventListener('click', () => edOpen(blobRef, fnRef));
       list.insertBefore(item, list.firstChild);
       setStatus('done', 'Clip prêt — '+(blob.size/1024/1024).toFixed(1)+' MB');
       log('Enregistré — '+filename+' ('+sizekb+' KB · '+total+')');
       document.getElementById('progressBar').style.width = '100%';
+      // Ouvrir automatiquement dans l'éditeur
+      edOpen(blobRef, fnRef);
     } catch(err) {
       setStatus('error', 'Erreur encodage: '+err.message);
       log('Erreur: '+err.message);
@@ -1443,12 +1636,500 @@ setInterval(() => {
 }, 30000);
 
 document.addEventListener('keydown', (e) => {
+  // Ctrl+Space → capture stream
   if (e.code === 'Space' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     if (!isBuffering) return;
     if (!isCapturing) triggerCapture(); else stopCapture();
+    return;
+  }
+
+  // Raccourcis éditeur — ignorés si focus dans un input/select
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  switch (e.key.toUpperCase()) {
+    case 'D': e.preventDefault(); if (ED.buffer) edRewind();    break;
+    case ' ': e.preventDefault(); if (ED.buffer) edPlayStop();  break;
+    case 'I': e.preventDefault(); if (ED.buffer) edSetStart();  break;
+    case 'O': e.preventDefault(); if (ED.buffer) edSetEnd();    break;
+    case 'T': e.preventDefault(); if (ED.buffer) edZoom(ED.zoom * 1.5); break;
+    case 'R': e.preventDefault(); if (ED.buffer) edZoom(ED.zoom / 1.5); break;
+    case 'E': e.preventDefault(); if (ED.buffer && ED.inPoint !== null && ED.outPoint !== null) edExport(); break;
   }
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ÉDITEUR AUDIO
+// ═══════════════════════════════════════════════════════════════════════════
+const ED = {
+  audioCtx:  null,    // AudioContext dédié à la lecture
+  buffer:    null,    // AudioBuffer du fichier chargé
+  source:    null,    // BufferSourceNode en cours de lecture
+  blob:      null,    // Blob MP3 original
+  filename:  '',
+  duration:  0,
+  // Playback
+  playing:   false,
+  startTime: 0,       // audioCtx.currentTime au moment du play
+  startOff:  0,       // offset dans le buffer au moment du play
+  curPos:    0,       // position courante (s)
+  // Région
+  inPoint:   null,
+  outPoint:  null,
+  // Zoom
+  zoom:      1,       // 1 = tout visible, max 20
+  scrollOff: 0,       // offset en secondes (début de la vue)
+  // RAF
+  rafId:     null,
+  // Waveform data
+  peaks:     null,    // Float32Array des peaks (une valeur par pixel logique)
+};
+
+function fmtMs(s) {
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1).padStart(4, '0');
+  return String(m).padStart(2,'0') + ':' + sec;
+}
+
+// ── Ouvrir un fichier dans l'éditeur ─────────────────────────────────────────
+async function edOpen(blob, filename) {
+  ED.blob = blob;
+  ED.filename = filename;
+  ED.inPoint = null; ED.outPoint = null;
+  ED.curPos = 0; ED.startOff = 0; ED.zoom = 1; ED.scrollOff = 0;
+
+  document.getElementById('audioEditor').classList.add('visible');
+  document.getElementById('editorFilename').textContent = filename;
+  document.getElementById('waveMarkerStart').style.display = 'none';
+  document.getElementById('waveMarkerEnd').style.display   = 'none';
+  document.getElementById('waveRegion').style.display      = 'none';
+  document.getElementById('trExport').disabled = true;
+  document.getElementById('trRegionTime').textContent = '';
+
+  // Décoder l'audio
+  if (!ED.audioCtx) ED.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ED.audioCtx.state === 'suspended') await ED.audioCtx.resume();
+
+  try {
+    const arrayBuf = await blob.arrayBuffer();
+    ED.buffer = await ED.audioCtx.decodeAudioData(arrayBuf);
+    ED.duration = ED.buffer.duration;
+    edBuildPeaks();
+    edDrawWave();
+    edDrawTimecode();
+    edUpdateZoomUI();
+    edUpdateCursor();
+    edUpdateScrollbar();
+    document.getElementById('trTime').textContent = fmtMs(0);
+  } catch(e) {
+    log('Éditeur: erreur décodage — ' + e.message);
+  }
+}
+
+// ── Calcul des peaks ─────────────────────────────────────────────────────────
+function edBuildPeaks() {
+  const canvas = document.getElementById('waveEditor');
+  const W = canvas.offsetWidth || 400;
+  const data = ED.buffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  ED.peaks = new Float32Array(W);
+  for (let i = 0; i < W; i++) {
+    let max = 0;
+    for (let j = i * step; j < Math.min((i+1)*step, data.length); j++) {
+      const v = Math.abs(data[j]);
+      if (v > max) max = v;
+    }
+    ED.peaks[i] = max;
+  }
+}
+
+// ── Dessin waveform ───────────────────────────────────────────────────────────
+function edDrawWave() {
+  const canvas = document.getElementById('waveEditor');
+  canvas.width  = canvas.offsetWidth  || 400;
+  canvas.height = canvas.offsetHeight || 80;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  if (!ED.peaks) return;
+
+  // Portion visible
+  const viewDur  = ED.duration / ED.zoom;
+  const viewSec  = Math.min(ED.scrollOff + viewDur, ED.duration);
+  const startFrac = ED.scrollOff / ED.duration;
+  const endFrac   = viewSec / ED.duration;
+
+  const startPeak = Math.floor(startFrac * ED.peaks.length);
+  const endPeak   = Math.ceil(endFrac   * ED.peaks.length);
+  const nPeaks    = endPeak - startPeak;
+
+  // Fond
+  ctx.fillStyle = '#090a0d';
+  ctx.fillRect(0, 0, W, H);
+
+  // Ligne centrale
+  ctx.strokeStyle = '#1a1c22';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+
+  // Waveform
+  const isMutedStream = isMuted;
+  ctx.fillStyle = (ED.playing && !isMutedStream) ? '#00b896' : '#3a5060';
+  const px = W / nPeaks;
+  for (let i = 0; i < nPeaks; i++) {
+    const peak = ED.peaks[startPeak + i] || 0;
+    const h = Math.max(2, peak * H * 0.9);
+    ctx.fillRect(i * px, (H - h) / 2, Math.max(1, px - 0.5), h);
+  }
+
+  // Région IN/OUT
+  if (ED.inPoint !== null && ED.outPoint !== null) {
+    const i1 = Math.min(ED.inPoint, ED.outPoint);
+    const i2 = Math.max(ED.inPoint, ED.outPoint);
+    const x1 = edSecToX(i1, W);
+    const x2 = edSecToX(i2, W);
+    ctx.fillStyle = 'rgba(0,184,150,0.1)';
+    ctx.fillRect(x1, 0, x2-x1, H);
+    ctx.strokeStyle = '#00b896'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1,0); ctx.lineTo(x1,H); ctx.stroke();
+    ctx.strokeStyle = '#dc0814';
+    ctx.beginPath(); ctx.moveTo(x2,0); ctx.lineTo(x2,H); ctx.stroke();
+    // Labels
+    ctx.font = '9px IBM Plex Mono,monospace';
+    ctx.fillStyle = '#00b896'; ctx.fillText('IN', x1+3, 12);
+    ctx.fillStyle = '#dc0814'; ctx.textAlign = 'right'; ctx.fillText('OUT', x2-3, 12);
+    ctx.textAlign = 'left';
+  } else if (ED.inPoint !== null) {
+    const x = edSecToX(ED.inPoint, W);
+    ctx.strokeStyle = '#00b896'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.font = '9px IBM Plex Mono,monospace';
+    ctx.fillStyle = '#00b896'; ctx.fillText('IN', x+3, 12);
+  }
+
+  // Curseur de lecture
+  const cx = edSecToX(ED.curPos, W);
+  ctx.strokeStyle = '#f5a000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+}
+
+function edSecToX(sec, W) {
+  const viewDur = ED.duration / ED.zoom;
+  return Math.round(((sec - ED.scrollOff) / viewDur) * W);
+}
+
+function edXToSec(x, W) {
+  const viewDur = ED.duration / ED.zoom;
+  return ED.scrollOff + (x / W) * viewDur;
+}
+
+// ── Timecode ruler ────────────────────────────────────────────────────────────
+function edDrawTimecode() {
+  const canvas = document.getElementById('waveTimecode');
+  canvas.width  = canvas.offsetWidth || 400;
+  canvas.height = 14;
+  const W = canvas.width;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, 14);
+  ctx.fillStyle = '#0a0b0e';
+  ctx.fillRect(0, 0, W, 14);
+
+  const viewDur = ED.duration / ED.zoom;
+  // Intervalle de tick selon le zoom
+  const intervals = [0.5, 1, 2, 5, 10, 30, 60];
+  const minPx = 50;
+  let tick = intervals.find(i => (i / viewDur) * W >= minPx) || 60;
+
+  const start = Math.ceil(ED.scrollOff / tick) * tick;
+  ctx.font = '7px IBM Plex Mono,monospace';
+  ctx.fillStyle = '#505668';
+  ctx.strokeStyle = '#1a1c22';
+
+  for (let t = start; t <= ED.scrollOff + viewDur; t += tick) {
+    const x = edSecToX(t, W);
+    ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, 14); ctx.stroke();
+    const label = fmtMs(t);
+    ctx.fillText(label, x + 2, 10);
+  }
+}
+
+// ── Scrollbar ─────────────────────────────────────────────────────────────────
+function edUpdateScrollbar() {
+  const bar   = document.getElementById('waveScrollbar');
+  const thumb = document.getElementById('waveScrollThumb');
+  const W     = bar.offsetWidth || 400;
+  const thumbW = Math.max(20, W / ED.zoom);
+  const maxOff = ED.duration - ED.duration / ED.zoom;
+  const pos    = maxOff > 0 ? (ED.scrollOff / maxOff) * (W - thumbW) : 0;
+  thumb.style.width = thumbW + 'px';
+  thumb.style.left  = pos + 'px';
+}
+
+// ── Zoom UI ────────────────────────────────────────────────────────────────────
+function edUpdateZoomUI() {
+  const pct = ((ED.zoom - 1) / 19) * 100;
+  document.getElementById('waveZoomFill').style.width = pct + '%';
+  document.getElementById('waveZoomVal').textContent  = ED.zoom.toFixed(1) + '×';
+}
+
+// ── Curseur et temps ──────────────────────────────────────────────────────────
+function edUpdateCursor() {
+  document.getElementById('trTime').textContent = fmtMs(ED.curPos);
+  edDrawWave();
+  edDrawTimecode();
+  edUpdateScrollbar();
+}
+
+// ── Play / Stop ───────────────────────────────────────────────────────────────
+function edPlayStop() {
+  if (!ED.buffer) return;
+  if (ED.playing) { edStop(); return; }
+
+  if (ED.audioCtx.state === 'suspended') ED.audioCtx.resume();
+  ED.source = ED.audioCtx.createBufferSource();
+  ED.source.buffer = ED.buffer;
+  ED.source.connect(ED.audioCtx.destination);
+
+  // Si on est après OUT, reprendre depuis IN ou début
+  const startPos = ED.curPos >= (ED.outPoint || ED.duration) ? (ED.inPoint || 0) : ED.curPos;
+  ED.startOff  = startPos;
+  ED.startTime = ED.audioCtx.currentTime;
+  ED.source.start(0, startPos);
+  ED.playing = true;
+
+  const btn = document.getElementById('trPlay');
+  btn.textContent = '⏸'; btn.classList.add('active');
+
+  ED.source.onended = () => { if (ED.playing) edStop(); };
+
+  // Auto-stop à OUT
+  if (ED.outPoint !== null && startPos < ED.outPoint) {
+    const dur = ED.outPoint - startPos;
+    ED.source.stop(ED.audioCtx.currentTime + dur);
+  }
+
+  // Loop RAF pour curseur
+  function tick() {
+    if (!ED.playing) return;
+    ED.curPos = Math.min(ED.startOff + (ED.audioCtx.currentTime - ED.startTime), ED.duration);
+    // Auto-scroll si curseur sort de la vue
+    const viewDur = ED.duration / ED.zoom;
+    if (ED.curPos > ED.scrollOff + viewDur * 0.9) {
+      ED.scrollOff = Math.min(ED.curPos - viewDur * 0.1, ED.duration - viewDur);
+    }
+    edUpdateCursor();
+    ED.rafId = requestAnimationFrame(tick);
+  }
+  ED.rafId = requestAnimationFrame(tick);
+}
+
+function edStop() {
+  ED.playing = false;
+  if (ED.source) { try { ED.source.stop(); } catch(e) {} ED.source = null; }
+  if (ED.rafId)  { cancelAnimationFrame(ED.rafId); ED.rafId = null; }
+  const btn = document.getElementById('trPlay');
+  btn.textContent = '▶'; btn.classList.remove('active');
+  edUpdateCursor();
+}
+
+function edRewind() {
+  const wasPlaying = ED.playing;
+  if (ED.playing) edStop();
+  ED.curPos    = ED.inPoint || 0;
+  ED.scrollOff = 0;
+  edUpdateCursor();
+  if (wasPlaying) edPlayStop();
+}
+
+// ── Set IN / OUT ──────────────────────────────────────────────────────────────
+function edSetStart() {
+  if (!ED.buffer) return;
+  ED.inPoint = ED.curPos;
+  if (ED.outPoint !== null && ED.inPoint >= ED.outPoint) ED.outPoint = null;
+  edUpdateRegion();
+  edDrawWave();
+}
+
+function edSetEnd() {
+  if (!ED.buffer) return;
+  ED.outPoint = ED.curPos;
+  if (ED.inPoint !== null && ED.outPoint <= ED.inPoint) ED.inPoint = null;
+  edUpdateRegion();
+  edDrawWave();
+}
+
+function edUpdateRegion() {
+  const hasRegion = ED.inPoint !== null && ED.outPoint !== null;
+  document.getElementById('trExport').disabled = !hasRegion;
+  if (hasRegion) {
+    const dur = Math.abs(ED.outPoint - ED.inPoint);
+    document.getElementById('trRegionTime').textContent = fmtMs(dur);
+  } else {
+    document.getElementById('trRegionTime').textContent = '';
+  }
+}
+
+// ── Export sélection ──────────────────────────────────────────────────────────
+async function edExport() {
+  if (ED.inPoint === null || ED.outPoint === null) return;
+  const i1 = Math.min(ED.inPoint, ED.outPoint);
+  const i2 = Math.max(ED.inPoint, ED.outPoint);
+  const sr  = ED.buffer.sampleRate;
+  const ch  = ED.buffer.numberOfChannels;
+  const s1  = Math.floor(i1 * sr);
+  const s2  = Math.floor(i2 * sr);
+  const len = s2 - s1;
+
+  // Découper l'AudioBuffer
+  const tmpCtx = new OfflineAudioContext(ch, len, sr);
+  const tmpBuf = tmpCtx.createBuffer(ch, len, sr);
+  for (let c2 = 0; c2 < ch; c2++) {
+    const src  = ED.buffer.getChannelData(c2).subarray(s1, s2);
+    tmpBuf.copyToChannel(src, c2);
+  }
+
+  // Encoder en MP3
+  setStatus('done', 'Export MP3...');
+  setTimeout(() => {
+    try {
+      const L = tmpBuf.getChannelData(0);
+      const R = ch > 1 ? tmpBuf.getChannelData(1) : L;
+      const enc = new lamejs.Mp3Encoder(2, sr, BITRATE);
+      const data = [];
+      const CHUNK = 1152;
+      for (let i = 0; i < L.length; i += CHUNK) {
+        const lSlice = L.subarray(i, i + CHUNK);
+        const rSlice = R.subarray(i, i + CHUNK);
+        const e = enc.encodeBuffer(f32ToI16(lSlice), f32ToI16(rSlice));
+        if (e.length > 0) data.push(new Uint8Array(e));
+      }
+      const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
+      const blob = new Blob(data, { type: 'audio/mpeg' });
+      const base = ED.filename.replace(/\.mp3$/i, '');
+      const ds   = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+      const fname = base + '_edit_' + ds + '.mp3';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=fname;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setStatus('done', 'Export — ' + (blob.size/1024).toFixed(0) + ' KB');
+      log('Export → ' + fname);
+    } catch(e) {
+      setStatus('error', 'Erreur export: ' + e.message);
+    }
+  }, 20);
+}
+
+// ── Click sur la waveform → déplacer le curseur ───────────────────────────────
+(function initEditorEvents() {
+  const container = document.getElementById('waveContainer');
+  const zoomTrack = document.getElementById('waveZoomTrack');
+  const scrollbar = document.getElementById('waveScrollbar');
+  const thumb     = document.getElementById('waveScrollThumb');
+
+  // Click waveform
+  function waveClick(e) {
+    if (!ED.buffer) return;
+    const rect = container.getBoundingClientRect();
+    const x    = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const sec  = edXToSec(x, rect.width);
+    ED.curPos  = Math.max(0, Math.min(sec, ED.duration));
+    if (ED.playing) {
+      edStop();
+      ED.curPos = Math.max(0, Math.min(sec, ED.duration));
+      edPlayStop();
+    }
+    edUpdateCursor();
+  }
+  container.addEventListener('click', waveClick);
+  container.addEventListener('touchend', (e) => { e.preventDefault(); waveClick(e); }, { passive: false });
+
+  // Pinch-to-zoom (mobile)
+  let lastDist = null;
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }, { passive: true });
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && lastDist) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = dist - lastDist;
+      lastDist = dist;
+      edZoom(ED.zoom + delta * 0.05);
+    }
+  }, { passive: true });
+
+  // Wheel zoom
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    edZoom(ED.zoom * (e.deltaY < 0 ? 1.15 : 0.87));
+  }, { passive: false });
+
+  // Barre de zoom (slider)
+  function setZoomFromTrack(e) {
+    const rect = zoomTrack.getBoundingClientRect();
+    const x    = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+    edZoom(1 + x * 19);
+  }
+  zoomTrack.addEventListener('click', setZoomFromTrack);
+  zoomTrack.addEventListener('mousedown', (e) => {
+    setZoomFromTrack(e);
+    const move = (ev) => setZoomFromTrack(ev);
+    const up   = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+
+  // Scrollbar thumb drag
+  let scrollDragX = null, scrollDragOff = null;
+  thumb.addEventListener('mousedown', (e) => {
+    scrollDragX   = e.clientX;
+    scrollDragOff = ED.scrollOff;
+    e.preventDefault();
+    const move = (ev) => {
+      if (!ED.buffer) return;
+      const bar   = document.getElementById('waveScrollbar');
+      const W     = bar.offsetWidth;
+      const thumbW = Math.max(20, W / ED.zoom);
+      const maxOff = ED.duration - ED.duration / ED.zoom;
+      const dx     = ev.clientX - scrollDragX;
+      const ratio  = dx / (W - thumbW);
+      ED.scrollOff = Math.max(0, Math.min(scrollDragOff + ratio * maxOff, maxOff));
+      edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  
+  // Redessiner au resize
+  window.addEventListener('resize', () => {
+    if (!ED.buffer) return;
+    edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+  });
+})();
+
+function edZoom(z) {
+  const prev = ED.zoom;
+  ED.zoom = Math.max(1, Math.min(20, z));
+  // Recentrer sur la position de lecture
+  const viewDur = ED.duration / ED.zoom;
+  ED.scrollOff = Math.max(0, Math.min(ED.curPos - viewDur / 2, ED.duration - viewDur));
+  edUpdateZoomUI();
+  edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+}
+
 
 </script>
 </body>
