@@ -92,6 +92,11 @@
       border-color: #3FCFD5;
       color: #3FCFD5;
     }
+    .stream-btn.switch-pending {
+      background: rgba(255,140,0,0.15);
+      border-color: var(--orange);
+      color: var(--orange);
+    }
     .stream-dot {
       width: 7px; height: 7px;
       border-radius: 50%;
@@ -313,11 +318,22 @@
         <input type="text" id="filePrefix" value="onefm-capture"/>
       </div>
       <div class="field">
+        <label>Pré-roll</label>
+        <select id="prerollDuration" onchange="setPreroll(this.value)">
+          <option value="10">10 secondes</option>
+          <option value="20">20 secondes</option>
+          <option value="30">30 secondes</option>
+          <option value="60" selected>60 secondes</option>
+          <option value="90">90 secondes</option>
+          <option value="120">120 secondes</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Durée max auto</label>
         <select id="postDuration">
           <option value="0" selected>Illimitée (stop manuel)</option>
-          <option value="120">2 minutes</option>
           <option value="60">1 minute</option>
+          <option value="120">2 minutes</option>
           <option value="180">3 minutes</option>
         </select>
       </div>
@@ -359,12 +375,23 @@ const STREAMS = {
 
 let currentStream = null;
 
-const PRE_ROLL    = 60;
+let PRE_ROLL      = 60;
 const SAMPLE_RATE = 44100;
 const BITRATE     = 192;
 const CHANNELS    = 2;
+
+function setPreroll(val) {
+  PRE_ROLL = parseInt(val);
+  MAX_RING_CHUNKS_DYN = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
+  // Mise à jour du sous-titre si un stream est sélectionné
+  if (currentStream) {
+    document.getElementById('headerSub').textContent =
+      currentStream.sub.replace(/pre-roll \d+s/, 'pre-roll ' + PRE_ROLL + 's');
+  }
+  log('Pré-roll → ' + PRE_ROLL + 's');
+}
 const BUFFER_SIZE = 4096;
-const MAX_RING_CHUNKS = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
+let MAX_RING_CHUNKS_DYN = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
 
 let audioCtx, analyser, dataArray, animId, monitorGain;
 let scriptProcessor, audioEl, srcNode;
@@ -385,8 +412,12 @@ function cancelSwitch() {
   if (switchTimeout) { clearTimeout(switchTimeout); switchTimeout = null; }
   pendingSwitchKey = null;
   // Remet les labels des boutons
-  document.getElementById('btnOneFM').innerHTML = '<span class="stream-dot"></span> One FM';
-  document.getElementById('btnLac').innerHTML   = '<span class="stream-dot"></span> Radio Lac';
+  const bOF = document.getElementById('btnOneFM');
+  const bLc = document.getElementById('btnLac');
+  bOF.innerHTML = '<span class="stream-dot"></span> One FM';
+  bLc.innerHTML = '<span class="stream-dot"></span> Radio Lac';
+  bOF.classList.remove('switch-pending');
+  bLc.classList.remove('switch-pending');
 }
 
 function applyStream(key) {
@@ -420,7 +451,9 @@ function selectStream(key) {
     cancelSwitch(); // annule un éventuel switch précédent
     pendingSwitchKey = key;
     const btnId = key === 'onefm' ? 'btnOneFM' : 'btnLac';
-    document.getElementById(btnId).innerHTML = '<span class="stream-dot"></span> Switch ?';
+    const btn = document.getElementById(btnId);
+    btn.innerHTML = '<span class="stream-dot"></span> Switch ?';
+    btn.classList.add('switch-pending');
     // Auto-annulation après 3s
     switchTimeout = setTimeout(() => {
       cancelSwitch();
@@ -596,7 +629,7 @@ async function startStream() {
     const onChunk = (L, R) => {
       const chunk = { L: new Float32Array(L), R: new Float32Array(R) };
       ringPCM.push(chunk);
-      if (ringPCM.length > MAX_RING_CHUNKS) ringPCM.shift();
+      if (ringPCM.length > MAX_RING_CHUNKS_DYN) ringPCM.shift();
       if (isCapturing) capturePCM.push(chunk);
     };
 
