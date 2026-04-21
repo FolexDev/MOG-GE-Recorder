@@ -1327,8 +1327,15 @@ function teardown() {
 }
 
 function doStop() {
-  if (isCapturing) { clearInterval(recInterval); isCapturing = false; }
-  teardown();
+  if (isCapturing) {
+    // Finaliser l'enregistrement (téléchargement) puis arrêter le stream
+    finalize();
+    // teardown sera appelé après l'encodage via le flag isBuffering=false dans teardown
+    // On planifie le teardown après le setTimeout de finalize (50ms + marge)
+    setTimeout(teardown, 200);
+  } else {
+    teardown();
+  }
 }
 
 // ── Raccourci Ctrl+Space ──────────────────────────────────────────────────────
