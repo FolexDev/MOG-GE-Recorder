@@ -455,7 +455,7 @@
       position: relative;
       height: 80px;
       background: #090a0d;
-      cursor: crosshair;
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='17' height='24' viewBox='0 0 17 24'%3E%3Crect x='7.5' y='4' width='2' height='16' fill='%23f5a000'/%3E%3Crect x='3' y='4' width='11' height='2' fill='%23f5a000'/%3E%3Crect x='3' y='18' width='11' height='2' fill='%23f5a000'/%3E%3C/svg%3E") 8 12, text;
       overflow: hidden;
     }
     .waveform-container canvas {
@@ -1927,10 +1927,11 @@ function edPlayStop() {
   ED.source.buffer = ED.buffer;
   ED.source.connect(ED.audioCtx.destination);
 
-  // Si on est après OUT, reprendre depuis IN ou début
+  // Mémoriser la position de départ pour y revenir au Stop
   const startPos = ED.curPos >= (ED.outPoint || ED.duration) ? (ED.inPoint || 0) : ED.curPos;
-  ED.startOff  = startPos;
-  ED.startTime = ED.audioCtx.currentTime;
+  ED.playOrigin = startPos; // ← position à restaurer au Stop
+  ED.startOff   = startPos;
+  ED.startTime  = ED.audioCtx.currentTime;
   ED.source.start(0, startPos);
   ED.playing = true;
 
@@ -1945,11 +1946,9 @@ function edPlayStop() {
     ED.source.stop(ED.audioCtx.currentTime + dur);
   }
 
-  // Loop RAF pour curseur
   function tick() {
     if (!ED.playing) return;
     ED.curPos = Math.min(ED.startOff + (ED.audioCtx.currentTime - ED.startTime), ED.duration);
-    // Auto-scroll si curseur sort de la vue
     const viewDur = ED.duration / ED.zoom;
     if (ED.curPos > ED.scrollOff + viewDur * 0.9) {
       ED.scrollOff = Math.min(ED.curPos - viewDur * 0.1, ED.duration - viewDur);
@@ -1964,6 +1963,13 @@ function edStop() {
   ED.playing = false;
   if (ED.source) { try { ED.source.stop(); } catch(e) {} ED.source = null; }
   if (ED.rafId)  { cancelAnimationFrame(ED.rafId); ED.rafId = null; }
+  // Retour au point de départ de la lecture
+  if (ED.playOrigin !== undefined) {
+    ED.curPos    = ED.playOrigin;
+    ED.scrollOff = Math.max(0, Math.min(ED.playOrigin - (ED.duration / ED.zoom) / 2,
+                             ED.duration - ED.duration / ED.zoom));
+    ED.playOrigin = undefined;
+  }
   const btn = document.getElementById('trPlay');
   btn.textContent = '▶'; btn.classList.remove('active');
   edUpdateCursor();
