@@ -575,6 +575,58 @@
       letter-spacing: 0.04em;
     }
 
+    /* ── Dialog rename export ── */
+    .rename-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(3px);
+      z-index: 1001;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .rename-overlay.open { display: flex; animation: popup-in 0.12s ease; }
+    .rename-dialog {
+      background: #1a1c24;
+      border: 1px solid #2e3240;
+      border-radius: 10px;
+      padding: 18px;
+      width: 300px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+    }
+    .rename-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 12px; font-weight: 700;
+      color: #c8cdd8; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .rename-input {
+      width: 100%;
+      background: #0e0f14; border: 1px solid #2e3240;
+      border-radius: 6px; padding: 9px 12px;
+      color: #c8cdd8;
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      letter-spacing: 0.04em; outline: none;
+      margin-bottom: 4px;
+    }
+    .rename-input:focus { border-color: #00b896; }
+    .rename-ext {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px; color: #404860;
+      margin-bottom: 12px; display: block;
+    }
+    .rename-btns { display: flex; gap: 8px; }
+    .rename-btn {
+      flex: 1; height: 38px; border-radius: 6px;
+      border: 1px solid #2e3240; background: #20232c;
+      color: #7880a0;
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.08s;
+    }
+    .rename-btn:hover { background: #282c38; color: #a0aacc; }
+    .rename-btn.confirm { border-color: #00b896; color: #00b896; background: rgba(0,184,150,0.08); }
+    .rename-btn.confirm:hover { background: rgba(0,184,150,0.15); }
     .notice {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 9px; color: #f5a000;
@@ -898,6 +950,19 @@
     <!-- Fichiers -->
     <div class="files" id="filesList"></div>
 
+  </div>
+</div>
+
+<!-- Dialog renommage export -->
+<div class="rename-overlay" id="renameDialog">
+  <div class="rename-dialog">
+    <div class="rename-title">Nommer le fichier</div>
+    <input class="rename-input" id="renameInput" type="text" placeholder="nom du fichier"/>
+    <span class="rename-ext">.mp3</span>
+    <div class="rename-btns">
+      <button class="rename-btn" onclick="renameCancel()">Annuler</button>
+      <button class="rename-btn confirm" onclick="renameConfirm()">Exporter</button>
+    </div>
   </div>
 </div>
 
@@ -1682,6 +1747,13 @@ document.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+  // Enter/Escape dans le dialog de renommage
+  if (document.getElementById('renameDialog').classList.contains('open')) {
+    if (e.key === 'Enter')  { e.preventDefault(); renameConfirm(); }
+    if (e.key === 'Escape') { e.preventDefault(); renameCancel();  }
+    return;
+  }
+
   switch (e.key.toUpperCase()) {
     case 'D': e.preventDefault(); if (ED.buffer) edRewind();    break;
     case ' ': e.preventDefault(); if (ED.buffer) edPlayStop();  break;
@@ -2015,6 +2087,31 @@ function edUpdateRegion() {
 // ── Export sélection ──────────────────────────────────────────────────────────
 async function edExport() {
   if (ED.inPoint === null || ED.outPoint === null) return;
+  // Proposer un nom par défaut et ouvrir le dialog de renommage
+  const base = ED.filename.replace(/\.mp3$/i, '');
+  const ds   = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  document.getElementById('renameInput').value = base + '_edit_' + ds;
+  document.getElementById('renameDialog').classList.add('open');
+  setTimeout(() => {
+    const inp = document.getElementById('renameInput');
+    inp.focus(); inp.select();
+  }, 80);
+}
+
+function renameCancel() {
+  document.getElementById('renameDialog').classList.remove('open');
+}
+
+function renameConfirm() {
+  const rawName = document.getElementById('renameInput').value.trim();
+  if (!rawName) return;
+  const fname = rawName.replace(/\.mp3$/i, '') + '.mp3';
+  document.getElementById('renameDialog').classList.remove('open');
+  edDoExport(fname);
+}
+
+function edDoExport(fname) {
+  if (ED.inPoint === null || ED.outPoint === null) return;
   const i1 = Math.min(ED.inPoint, ED.outPoint);
   const i2 = Math.max(ED.inPoint, ED.outPoint);
   const sr  = ED.buffer.sampleRate;
@@ -2023,15 +2120,12 @@ async function edExport() {
   const s2  = Math.floor(i2 * sr);
   const len = s2 - s1;
 
-  // Découper l'AudioBuffer
-  const tmpCtx = new OfflineAudioContext(ch, len, sr);
-  const tmpBuf = tmpCtx.createBuffer(ch, len, sr);
+  const tmpBuf = ED.audioCtx.createBuffer(ch, len, sr);
   for (let c2 = 0; c2 < ch; c2++) {
-    const src  = ED.buffer.getChannelData(c2).subarray(s1, s2);
+    const src = ED.buffer.getChannelData(c2).subarray(s1, s2);
     tmpBuf.copyToChannel(src, c2);
   }
 
-  // Encoder en MP3
   setStatus('done', 'Export MP3...');
   setTimeout(() => {
     try {
@@ -2041,17 +2135,12 @@ async function edExport() {
       const data = [];
       const CHUNK = 1152;
       for (let i = 0; i < L.length; i += CHUNK) {
-        const lSlice = L.subarray(i, i + CHUNK);
-        const rSlice = R.subarray(i, i + CHUNK);
-        const e = enc.encodeBuffer(f32ToI16(lSlice), f32ToI16(rSlice));
+        const e = enc.encodeBuffer(f32ToI16(L.subarray(i, i+CHUNK)), f32ToI16(R.subarray(i, i+CHUNK)));
         if (e.length > 0) data.push(new Uint8Array(e));
       }
       const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
       const blob = new Blob(data, { type: 'audio/mpeg' });
-      const base = ED.filename.replace(/\.mp3$/i, '');
-      const ds   = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-      const fname = base + '_edit_' + ds + '.mp3';
-      const url = URL.createObjectURL(blob);
+      const url  = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href=url; a.download=fname;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60000);
