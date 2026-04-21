@@ -719,7 +719,7 @@ async function startStream() {
       if (!isCapturing)
         document.getElementById('progressBar').style.width = (prerollSec/PRE_ROLL*100)+'%';
       if (prerollSec >= PRE_ROLL) {
-        setStatus('ready', 'Pré-roll prêt (60s) — prêt à capturer');
+        setStatus('ready', 'Pré-roll prêt (' + PRE_ROLL + 's) — prêt à capturer');
         document.getElementById('prerollDisplay').className = 'timer-value rec';
       }
     }, 1000);
