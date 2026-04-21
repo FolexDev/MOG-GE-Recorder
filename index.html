@@ -50,14 +50,14 @@
     .header {
       background: linear-gradient(180deg, #22252d 0%, #1a1d24 100%);
       border-bottom: 1px solid #141620;
-      padding: 12px 16px;
+      padding: 10px 16px 8px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .header-brand { display: flex; align-items: center; gap: 10px; }
 
     .header-logo {
       width: 30px; height: 30px; flex-shrink: 0;
@@ -76,8 +76,9 @@
     .header-sub {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 8px; color: #606878; letter-spacing: 0.05em;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      margin-top: 2px;
+      white-space: normal;
+      line-height: 1.5;
+      padding-left: 40px;
     }
 
     .enc-badge {
@@ -474,14 +475,16 @@
 <div class="shell">
 
   <div class="header">
-    <div class="header-brand">
-      <div class="header-logo"><img src="https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block;"/></div>
-      <div class="header-text">
-        <div class="header-title">MOG-GE Recorder</div>
-        <div class="header-sub" id="headerSub">Sélectionne un flux ci-dessous</div>
+    <div class="header-top">
+      <div class="header-brand">
+        <div class="header-logo"><img src="https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block;"/></div>
+        <div class="header-text">
+          <div class="header-title">MOG-GE Recorder</div>
+        </div>
       </div>
+      <div class="enc-badge" id="encBadge">⏳ LOADING ENC</div>
     </div>
-    <div class="enc-badge" id="encBadge">⏳ LOADING ENC</div>
+    <div class="header-sub" id="headerSub">Sélectionne un flux ci-dessous</div>
   </div>
 
   <div class="body">
@@ -908,14 +911,18 @@ function setPreroll(val) {
 
   if (!isBuffering) return;
 
-  const statusTxt = document.getElementById('statusText').textContent;
+  // Recalibrer prerollSec à la nouvelle durée (si on baisse, on clamp)
+  prerollSec = Math.min(prerollSec, PRE_ROLL);
 
   if (prerollSec < PRE_ROLL) {
-    // Buffer pas encore plein pour la nouvelle durée → relancer la progression
-    setStatus('buffering', 'Stream actif — accumulation du pré-roll...');
-    setCapButtons(false, false);
+    // Buffer insuffisant pour la nouvelle durée → afficher la progression
+    // mais laisser Capturer disponible (l'audio s'accumule de toute façon)
+    document.getElementById('prerollDisplay').textContent = fmt(prerollSec);
     document.getElementById('prerollDisplay').className = 'timer-val active';
-    document.getElementById('progressBar').style.width = (prerollSec / PRE_ROLL * 100) + '%';
+    if (!isCapturing) document.getElementById('progressBar').style.width = (prerollSec / PRE_ROLL * 100) + '%';
+    setStatus('buffering', 'Pré-roll — ' + prerollSec + 's / ' + PRE_ROLL + 's');
+    // Capturer reste cliquable
+    if (!isCapturing) setCapButtons(true, false);
 
     // Redémarrer le prerollInterval si arrêté
     if (!prerollInterval) {
@@ -925,17 +932,19 @@ function setPreroll(val) {
         if (!isCapturing) document.getElementById('progressBar').style.width = (prerollSec / PRE_ROLL * 100) + '%';
         if (prerollSec >= PRE_ROLL) {
           setStatus('ready', 'Pré-roll prêt (' + PRE_ROLL + 's) — prêt à capturer');
-          if (!isCapturing) setCapButtons(true, false);
           document.getElementById('prerollDisplay').className = 'timer-val rec';
           clearInterval(prerollInterval); prerollInterval = null;
         }
       }, 1000);
     }
   } else {
-    // prerollSec >= PRE_ROLL : buffer déjà suffisant, juste mettre à jour l'affichage
-    document.getElementById('prerollDisplay').textContent = fmt(prerollSec);
+    // Buffer déjà suffisant → affichage immédiat
+    prerollSec = PRE_ROLL;
+    document.getElementById('prerollDisplay').textContent = fmt(PRE_ROLL);
+    document.getElementById('prerollDisplay').className = 'timer-val rec';
     document.getElementById('progressBar').style.width = '100%';
     setStatus('ready', 'Pré-roll prêt (' + PRE_ROLL + 's) — prêt à capturer');
+    if (!isCapturing) setCapButtons(true, false);
   }
 }
 
