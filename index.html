@@ -312,6 +312,19 @@
     }
 
     .btn.mute.active { border-color: #f5a000; color: #f5a000; background: rgba(245,160,0,0.06); }
+    .btn kbd {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: inherit;
+      opacity: 0.7;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .btn:disabled kbd { opacity: 0.4; }
     .btn.full { grid-column: 1 / -1; }
 
     /* ── Log & Files ── */
@@ -491,7 +504,7 @@
         <div class="timer-val" id="prerollDisplay">00:00</div>
       </div>
       <div class="timer">
-        <div class="timer-lbl">Enregistrement</div>
+        <div class="timer-lbl" style="display:flex;align-items:center;gap:5px;">Enregistrement<span class="rec-led" id="recLed"></span></div>
         <div class="timer-val" id="recDisplay">—:——</div>
       </div>
     </div>
@@ -600,8 +613,8 @@
 
     <!-- Boutons action -->
     <div class="actions">
-      <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer</button>
-      <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper</button>
+      <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer <kbd>⌃Space</kbd></button>
+      <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper <kbd>⌃Space</kbd></button>
       <button class="btn full"    id="btnStop"    onclick="doStop()"  style="display:none">⏹ Arrêter le stream</button>
       <!-- btnMute remplacé par bouton console dans le VU mètre -->
     </div>
@@ -1120,6 +1133,7 @@ function triggerCapture() {
   snapshotSec = Math.round(captureSnapshot.length * BUFFER_SIZE / SAMPLE_RATE);
   capturePCM = []; isCapturing = true;
   setCapButtons(false, true);
+  const rl = document.getElementById('recLed'); if (rl) rl.classList.add('active');
   const pt = postTarget;
   setStatus('recording', pt === 0 ? 'Enregistrement en cours...' : 'Enregistrement — ' + pt + 's');
   recSec = 0;
@@ -1152,6 +1166,7 @@ function encodeMp3(chunks) {
 
 function finalize() {
   isCapturing = false; setCapButtons(false, false); setStatus('done', 'Encodage MP3...');
+  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
   setTimeout(() => {
     try {
       const blob = encodeMp3([...captureSnapshot, ...capturePCM]);
@@ -1186,6 +1201,9 @@ function toggleMute() {
 
 // ── Teardown ──────────────────────────────────────────────────────────────────
 function teardown() {
+  // Retirer l'état actif des pads antenne
+  document.getElementById('btnOneFM').classList.remove('pad-on');
+  document.getElementById('btnLac').classList.remove('pad-on');
   try { if (streamAbort)     { streamAbort.abort();        streamAbort = null;    } } catch(e) {}
   try { if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; } } catch(e) {}
   try { if (srcNode)         { srcNode.disconnect();        srcNode = null;        } } catch(e) {}
