@@ -378,8 +378,19 @@ const canvas = document.getElementById('waveform');
 const ctx2   = canvas.getContext('2d');
 
 // -- Sélection du flux --
-function selectStream(key) {
-  if (isBuffering) return;
+let pendingSwitchKey = null;
+let switchTimeout   = null;
+
+function cancelSwitch() {
+  if (switchTimeout) { clearTimeout(switchTimeout); switchTimeout = null; }
+  pendingSwitchKey = null;
+  // Remet les labels des boutons
+  document.getElementById('btnOneFM').textContent = 'One FM';
+  document.getElementById('btnLac').textContent   = 'Radio Lac';
+}
+
+function applyStream(key) {
+  cancelSwitch();
   currentStream = STREAMS[key];
 
   const r = document.documentElement.style;
@@ -393,8 +404,33 @@ function selectStream(key) {
   document.getElementById('headerSub').textContent = currentStream.sub;
   document.getElementById('filePrefix').value = currentStream.prefix;
 
-  // iOS : AudioContext doit être créé/résumé dans le même tick qu'un geste utilisateur
   if (lameReady) startStream();
+}
+
+function selectStream(key) {
+  // Pas de stream actif → sélection directe
+  if (!isBuffering) { applyStream(key); return; }
+
+  // Déjà sur ce flux → rien
+  const currentKey = Object.keys(STREAMS).find(k => STREAMS[k] === currentStream);
+  if (key === currentKey) return;
+
+  // Premier appui → demande confirmation
+  if (pendingSwitchKey !== key) {
+    cancelSwitch(); // annule un éventuel switch précédent
+    pendingSwitchKey = key;
+    const btnId = key === 'onefm' ? 'btnOneFM' : 'btnLac';
+    document.getElementById(btnId).textContent = 'Switch ?';
+    // Auto-annulation après 3s
+    switchTimeout = setTimeout(() => {
+      cancelSwitch();
+    }, 3000);
+    return;
+  }
+
+  // Deuxième appui → confirmation → switch
+  teardownStream();
+  applyStream(key);
 }
 
 // -- lamejs --
