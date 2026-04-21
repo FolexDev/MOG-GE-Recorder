@@ -931,15 +931,8 @@ function showStreamControls(show) {
 function setCapButtons(capEn, stopEn) {
   const bt = document.getElementById('btnTrigger');
   const bs = document.getElementById('btnStopCap');
-  if (bt) {
-    bt.disabled = !capEn;
-    // Forcer le recalcul du style
-    bt.offsetHeight;
-  }
-  if (bs) {
-    bs.disabled = !stopEn;
-    bs.offsetHeight;
-  }
+  if (bt) bt.disabled = !capEn;
+  if (bs) bs.disabled = !stopEn;
 }
 
 // ── Pad / switch ───────────────────────────────────────────────────────────────
@@ -1171,22 +1164,24 @@ async function startStream() {
 // ── Capture ───────────────────────────────────────────────────────────────────
 function triggerCapture() {
   if (isCapturing) return;
-  // Désactivation immédiate pour éviter double-déclenchement
-  const btnCap = document.getElementById('btnTrigger');
-  if (btnCap) btnCap.disabled = true;
 
-  // Snapshot du ring buffer : copie shallow instantanée
+  isCapturing = true;
   captureSnapshot = ringPCM.slice();
   snapshotSec = Math.round(captureSnapshot.length * BUFFER_SIZE / SAMPLE_RATE);
-  capturePCM = []; isCapturing = true;
-  setCapButtons(false, true);
+  capturePCM = [];
+
+  // UI : capturer OFF, stopper ON — directement sans passer par setCapButtons
+  document.getElementById('btnTrigger').disabled = true;
+  document.getElementById('btnStopCap').disabled = false;
   const rl = document.getElementById('recLed'); if (rl) rl.classList.add('active');
+
   const pt = postTarget;
   setStatus('recording', pt === 0 ? 'Enregistrement en cours...' : 'Enregistrement — ' + pt + 's');
   recSec = 0;
   const rec = document.getElementById('recDisplay');
   rec.textContent = fmt(0); rec.className = 'timer-val rec';
 
+  if (recInterval) clearInterval(recInterval);
   recInterval = setInterval(() => {
     recSec++;
     document.getElementById('recDisplay').textContent = fmt(recSec);
@@ -1194,7 +1189,7 @@ function triggerCapture() {
       const rem = pt - recSec;
       document.getElementById('progressBar').style.width = Math.min(recSec / pt * 100, 100) + '%';
       if (rem > 0) setStatus('recording', 'Enregistrement — ' + rem + 's restantes');
-      if (recSec >= pt) { clearInterval(recInterval); finalize(); }
+      if (recSec >= pt) { clearInterval(recInterval); recInterval = null; finalize(); }
     } else {
       setStatus('recording', 'Enregistrement — ' + fmt(recSec) + ' (stop manuel)');
     }
@@ -1203,9 +1198,14 @@ function triggerCapture() {
 
 function stopCapture() {
   if (!isCapturing) return;
-  // Désactivation immédiate
-  const bs = document.getElementById('btnStopCap'); if (bs) bs.disabled = true;
-  clearInterval(recInterval);
+  isCapturing = false;
+  if (recInterval) { clearInterval(recInterval); recInterval = null; }
+
+  // UI : stopper OFF immédiatement
+  document.getElementById('btnStopCap').disabled = true;
+  document.getElementById('btnTrigger').disabled = true;
+  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
+
   finalize();
 }
 
@@ -1225,9 +1225,13 @@ function encodeMp3(chunks) {
 }
 
 function finalize() {
-  isCapturing = false; setCapButtons(false, false); setStatus('done', 'Encodage MP3...');
+  // Peut être appelée depuis stopCapture (isCapturing déjà false) ou timer auto
+  isCapturing = false;
+  if (recInterval) { clearInterval(recInterval); recInterval = null; }
+  document.getElementById('btnStopCap').disabled = true;
+  document.getElementById('btnTrigger').disabled = true;
   const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
-  // Libérer la mémoire immédiatement avant l'encodage
+  setStatus('done', 'Encodage MP3...');
   const allChunks = captureSnapshot.concat(capturePCM);
   captureSnapshot = []; capturePCM = [];
   setTimeout(() => {
