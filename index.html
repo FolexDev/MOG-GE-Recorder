@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>MOG-GE Stream Recorder</title>
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png"/>
-
-  <!-- Ajout écran d'accueil iOS -->
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png"/>
+  <link rel="manifest" href="manifest.json"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="MOG Recorder"/>
-  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png"/>
-
-  <!-- Ajout écran d'accueil Android -->
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="application-name" content="MOG Recorder"/>
+  <meta name="theme-color" content="#0f0f0f"/>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap');
 
