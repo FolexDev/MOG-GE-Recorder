@@ -385,8 +385,8 @@ function cancelSwitch() {
   if (switchTimeout) { clearTimeout(switchTimeout); switchTimeout = null; }
   pendingSwitchKey = null;
   // Remet les labels des boutons
-  document.getElementById('btnOneFM').textContent = 'One FM';
-  document.getElementById('btnLac').textContent   = 'Radio Lac';
+  document.getElementById('btnOneFM').innerHTML = '<span class="stream-dot"></span> One FM';
+  document.getElementById('btnLac').innerHTML   = '<span class="stream-dot"></span> Radio Lac';
 }
 
 function applyStream(key) {
@@ -420,7 +420,7 @@ function selectStream(key) {
     cancelSwitch(); // annule un éventuel switch précédent
     pendingSwitchKey = key;
     const btnId = key === 'onefm' ? 'btnOneFM' : 'btnLac';
-    document.getElementById(btnId).textContent = 'Switch ?';
+    document.getElementById(btnId).innerHTML = '<span class="stream-dot"></span> Switch ?';
     // Auto-annulation après 3s
     switchTimeout = setTimeout(() => {
       cancelSwitch();
@@ -576,8 +576,7 @@ const IS_IOS_STANDALONE = IS_IOS && window.navigator.standalone === true;
 async function startStream() {
   if (!lameReady) { log('Encodeur pas encore prêt...'); return; }
   if (!currentStream) { log('Sélectionne un flux d\'abord'); return; }
-  document.getElementById('btnOneFM').disabled = true;
-  document.getElementById('btnLac').disabled   = true;
+  // Les boutons restent actifs pour permettre le switch
 
   setStatus('buffering', 'Connexion au stream...');
   log('Connexion à ' + currentStream.url);
@@ -827,8 +826,7 @@ function teardownStream() {
   document.getElementById('btnTrigger').disabled = true;
   document.getElementById('btnStopCap').disabled = true;
   document.getElementById('streamControls').style.display = 'none';
-  document.getElementById('btnOneFM').disabled = false;
-  document.getElementById('btnLac').disabled   = false;
+  // boutons stream toujours actifs
   isMuted = false;
   try { if (monitorGain) { monitorGain.gain.value = 1.0; monitorGain = null; } } catch(e) {}
   const btnMute = document.getElementById('btnMute');
