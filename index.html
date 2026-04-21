@@ -374,6 +374,60 @@
       box-shadow: 0 0 6px rgba(255,30,30,0.9), 0 0 14px rgba(255,0,0,0.4);
       animation: pulse 0.8s ease-in-out infinite;
     }
+    /* ── Dialog ── */
+    .dialog-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(3px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .dialog-overlay.open { display: flex; animation: popup-in 0.15s ease; }
+    .dialog {
+      background: #1a1c24;
+      border: 1px solid #2e3240;
+      border-radius: 10px;
+      padding: 20px;
+      width: 280px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+    }
+    .dialog-icon {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #ff2020;
+      box-shadow: 0 0 8px rgba(255,32,32,0.8);
+      display: inline-block;
+      animation: pulse 0.8s ease-in-out infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .dialog-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px; font-weight: 700;
+      color: #c8cdd8; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .dialog-msg {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px; color: #6878a0;
+      line-height: 1.6; margin-bottom: 16px;
+    }
+    .dialog-btns { display: flex; flex-direction: column; gap: 7px; }
+    .dialog-btn {
+      height: 40px; border-radius: 6px;
+      border: 1px solid #2e3240; background: #20232c;
+      color: #7880a0;
+      font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: all 0.08s;
+    }
+    .dialog-btn:hover { background: #282c38; color: #a0aacc; }
+    .dialog-btn.danger { border-color: #600308; background: rgba(200,6,16,0.08); color: #dc0814; }
+    .dialog-btn.danger:hover { background: rgba(200,6,16,0.15); }
+    .dialog-btn.success { border-color: #00b896; background: rgba(0,184,150,0.08); color: #00b896; }
+    .dialog-btn.success:hover { background: rgba(0,184,150,0.15); }
+
     .notice {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 9px; color: #f5a000;
@@ -657,6 +711,19 @@
     <!-- Fichiers -->
     <div class="files" id="filesList"></div>
 
+  </div>
+</div>
+
+<!-- Dialog arrêt stream -->
+<div class="dialog-overlay" id="stopDialog">
+  <div class="dialog">
+    <div class="dialog-title"><span class="dialog-icon"></span>Enregistrement en cours</div>
+    <div class="dialog-msg">Un enregistrement est actif.<br>Que veux-tu faire&nbsp;?</div>
+    <div class="dialog-btns">
+      <button class="dialog-btn success" onclick="dialogAction('save')">⏹ Arrêter et enregistrer</button>
+      <button class="dialog-btn danger"  onclick="dialogAction('discard')">⏹ Arrêter le stream</button>
+      <button class="dialog-btn"         onclick="dialogAction('cancel')">↩ Annuler</button>
+    </div>
   </div>
 </div>
 
@@ -1269,8 +1336,12 @@ function finalize() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      // Révoquer l'URL blob après 60s (libère la mémoire tout en laissant le temps au DL)
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       const total = fmt(snapSec + rSec);
       const list = document.getElementById('filesList');
+      // Garder max 10 items dans la liste
+      while (list.children.length >= 10) list.removeChild(list.lastChild);
       const item = document.createElement('div'); item.className = 'file-item';
       item.innerHTML = '<div><div class="file-name">'+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'">↓ DL</a>';
       list.insertBefore(item, list.firstChild);
@@ -1328,17 +1399,49 @@ function teardown() {
 
 function doStop() {
   if (isCapturing) {
-    // Finaliser l'enregistrement (téléchargement) puis arrêter le stream
-    finalize();
-    // teardown sera appelé après l'encodage via le flag isBuffering=false dans teardown
-    // On planifie le teardown après le setTimeout de finalize (50ms + marge)
-    setTimeout(teardown, 200);
+    document.getElementById('stopDialog').classList.add('open');
   } else {
     teardown();
   }
 }
 
+function dialogAction(action) {
+  document.getElementById('stopDialog').classList.remove('open');
+  if (action === 'cancel') return;
+  if (action === 'save') {
+    // Finaliser + télécharger, puis arrêter le stream
+    finalize();
+    setTimeout(teardown, 300);
+  } else if (action === 'discard') {
+    // Arrêter sans enregistrer
+    isCapturing = false;
+    if (recInterval) { clearInterval(recInterval); recInterval = null; }
+    teardown();
+  }
+}
+
+// ── Résume AudioContext si suspendu (iOS background/screen lock) ─────────────
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+});
+
+// Sur iOS, un tap sur la page suffit à résumer
+document.addEventListener('touchstart', () => {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+}, { passive: true });
+
 // ── Raccourci Ctrl+Space ──────────────────────────────────────────────────────
+// ── Watchdog audio (toutes les 30s) ─────────────────────────────────────────
+setInterval(() => {
+  if (!isBuffering || !audioCtx) return;
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+    log('AudioContext résumé (watchdog)');
+  }
+}, 30000);
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
