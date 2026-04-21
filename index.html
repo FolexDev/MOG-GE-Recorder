@@ -931,7 +931,29 @@
   <div class="knob-popup-item" data-val="180">3 min</div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+<script>
+// Chargement dynamique de lamejs avec fallback
+(function loadLame() {
+  const urls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js',
+    'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js',
+  ];
+  let idx = 0;
+  function tryLoad() {
+    if (idx >= urls.length) {
+      document.getElementById('encBadge').textContent = '✗ Encodeur indisponible';
+      document.getElementById('encBadge').style.color = '#ff4444';
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = urls[idx++];
+    s.onload  = () => { /* checkLame sera appelé après */ };
+    s.onerror = () => { tryLoad(); };
+    document.head.appendChild(s);
+  }
+  tryLoad();
+})();
+</script>
 <script>
 
 // ── VU Meter ──────────────────────────────────────────────────────────────────
@@ -1292,13 +1314,24 @@ function selectStream(key) {
 }
 
 // ── Lame ───────────────────────────────────────────────────────────────────────
+let _lameCheckCount = 0;
 function checkLame() {
+  _lameCheckCount++;
   if (typeof lamejs !== 'undefined') {
     lameReady = true;
     document.getElementById('encBadge').textContent = '✓ MP3 · 44.1kHz · Stéréo · 192kbps';
     setStatus('', 'Sélectionne un flux pour démarrer');
     log('Encodeur prêt');
-  } else setTimeout(checkLame, 200);
+  } else if (_lameCheckCount < 50) {
+    setTimeout(checkLame, 300);
+  } else {
+    // Après 15s : afficher erreur et proposer reload
+    document.getElementById('encBadge').textContent = '✗ Reload requis';
+    document.getElementById('encBadge').style.color = '#ff4444';
+    document.getElementById('encBadge').style.cursor = 'pointer';
+    document.getElementById('encBadge').onclick = () => location.reload();
+    setStatus('error', 'Encodeur non chargé — vérifie ta connexion et recharge');
+  }
 }
 setTimeout(checkLame, 300);
 
@@ -1533,7 +1566,7 @@ function finalize() {
       // Stocker le blob sur l'élément pour l'éditeur
       const blobRef = blob;
       const fnRef   = filename;
-      item.innerHTML = '<div style="cursor:pointer;flex:1" title="Ouvrir dans l'éditeur"><div class="file-name">▶ '+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'" onclick="event.stopPropagation()">↓ DL</a>';
+      item.innerHTML = '<div style="cursor:pointer;flex:1" title="Ouvrir dans l&#39;éditeur"><div class="file-name">▶ '+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'" onclick="event.stopPropagation()">↓ DL</a>';
       item.querySelector('div[style]').addEventListener('click', () => edOpen(blobRef, fnRef));
       list.insertBefore(item, list.firstChild);
       setStatus('done', 'Clip prêt — '+(blob.size/1024/1024).toFixed(1)+' MB');
