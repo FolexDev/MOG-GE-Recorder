@@ -777,15 +777,14 @@ function toggleMute() {
 }
 
 // -- Stop stream --
-function stopAll() {
-  if (isCapturing) { clearInterval(recInterval); finalizeCapture(); return; }
+function teardownStream() {
   if (streamAbort)     { streamAbort.abort(); streamAbort = null; }
   if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
   if (srcNode)         { srcNode.disconnect(); srcNode = null; }
   if (audioEl)         { audioEl.pause(); audioEl.src = ''; audioEl = null; }
   if (audioCtx)        { audioCtx.close(); audioCtx = null; }
-  if (prerollInterval) clearInterval(prerollInterval);
-  if (animId) cancelAnimationFrame(animId);
+  if (prerollInterval) { clearInterval(prerollInterval); prerollInterval = null; }
+  if (animId)          { cancelAnimationFrame(animId); animId = null; }
   drawFlatLine();
   isBuffering = false;
   ringPCM = []; capturePCM = []; captureSnapshot = [];
@@ -801,6 +800,14 @@ function stopAll() {
   btnMute.classList.remove('active');
   setStatus('', 'Arrêté');
   log('Stream déconnecté');
+}
+
+function stopAll() {
+  if (isCapturing) {
+    clearInterval(recInterval);
+    finalizeCapture(); // encode + télécharge le clip en cours
+  }
+  teardownStream();   // coupe le stream dans tous les cas
 }
 
 // -- Raccourci clavier Ctrl+Space --
