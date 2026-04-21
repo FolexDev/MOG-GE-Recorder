@@ -350,6 +350,19 @@
     }
 
     /* ── CORS notice ── */
+    .rec-led {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #2a0808;
+      border: 1px solid #1a0404;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .rec-led.active {
+      background: #ff2020;
+      box-shadow: 0 0 6px rgba(255,30,30,0.9), 0 0 14px rgba(255,0,0,0.4);
+      animation: pulse 0.8s ease-in-out infinite;
+    }
     .notice {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 9px; color: #f5a000;
@@ -613,8 +626,8 @@
 
     <!-- Boutons action -->
     <div class="actions">
-      <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer <kbd>⌃Space</kbd></button>
-      <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper <kbd>⌃Space</kbd></button>
+      <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer <kbd>Ctrl+Space</kbd></button>
+      <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper <kbd>Ctrl+Space</kbd></button>
       <button class="btn full"    id="btnStop"    onclick="doStop()"  style="display:none">⏹ Arrêter le stream</button>
       <!-- btnMute remplacé par bouton console dans le VU mètre -->
     </div>
@@ -1204,6 +1217,8 @@ function teardown() {
   // Retirer l'état actif des pads antenne
   document.getElementById('btnOneFM').classList.remove('pad-on');
   document.getElementById('btnLac').classList.remove('pad-on');
+  currentStream = null;
+  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
   try { if (streamAbort)     { streamAbort.abort();        streamAbort = null;    } } catch(e) {}
   try { if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; } } catch(e) {}
   try { if (srcNode)         { srcNode.disconnect();        srcNode = null;        } } catch(e) {}
