@@ -503,6 +503,39 @@ class PCMCapture extends AudioWorkletProcessor {
 registerProcessor('pcm-capture', PCMCapture);
 `;
 
+// -- Fetch+decode stream pour iOS standalone --
+async function fetchAndStreamAudio(url, ctx, sp, signal) {
+  const resp = await fetch(url, { signal });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const reader = resp.body.getReader();
+  let buf = new Uint8Array(0);
+  const CHUNK = 128 * 1024;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done || signal.aborted) break;
+    const merged = new Uint8Array(buf.length + value.length);
+    merged.set(buf); merged.set(value, buf.length);
+    buf = merged;
+
+    while (buf.length >= CHUNK) {
+      const slice = buf.slice(0, CHUNK).buffer.slice(0);
+      buf = buf.slice(CHUNK);
+      try {
+        const decoded = await ctx.decodeAudioData(slice);
+        const src = ctx.createBufferSource();
+        src.buffer = decoded;
+        src.connect(sp);
+        src.start();
+      } catch(e) { /* chunk incomplet, on continue */ }
+    }
+  }
+}
+
+// -- Détection iOS standalone (WebApp ajoutée à l'écran d'accueil) --
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const IS_IOS_STANDALONE = IS_IOS && window.navigator.standalone === true;
+
 // -- Connexion stream --
 async function startStream() {
   if (!lameReady) { log('Encodeur pas encore prêt...'); return; }
@@ -514,18 +547,8 @@ async function startStream() {
   log('Connexion à ' + currentStream.url);
 
   try {
-    audioEl = new Audio();
-    audioEl.crossOrigin = 'anonymous';
-    audioEl.src = currentStream.url;
-    audioEl.volume = 0.6;
-    // iOS : attributs requis pour lecture audio dans une WebApp
-    audioEl.playsInline = true;
-    audioEl.setAttribute('playsinline', '');
-    audioEl.setAttribute('webkit-playsinline', '');
-
-    // iOS : AudioContext doit être créé dans le tick du geste utilisateur
+    // AudioContext — webkitAudioContext pour iOS
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
-    // Si suspendu (politique iOS), on le résume immédiatement
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     analyser = audioCtx.createAnalyser();
@@ -535,57 +558,81 @@ async function startStream() {
     monitorGain = audioCtx.createGain();
     monitorGain.gain.value = 1.0;
 
-    srcNode = audioCtx.createMediaElementSource(audioEl);
-    srcNode.connect(analyser);
-    analyser.connect(monitorGain);
-    monitorGain.connect(audioCtx.destination);
-
-    // AudioWorklet si supporté (desktop/Android), fallback ScriptProcessor (iOS Safari)
     const onChunk = (L, R) => {
-      const chunk = { L, R };
+      const chunk = { L: new Float32Array(L), R: new Float32Array(R) };
       ringPCM.push(chunk);
       if (ringPCM.length > MAX_RING_CHUNKS) ringPCM.shift();
       if (isCapturing) capturePCM.push(chunk);
     };
 
-    if (audioCtx.audioWorklet) {
-      const wBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
-      const wURL  = URL.createObjectURL(wBlob);
-      await audioCtx.audioWorklet.addModule(wURL);
-      URL.revokeObjectURL(wURL);
-      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture', {
-        numberOfInputs: 1, numberOfOutputs: 0, channelCount: CHANNELS
-      });
-      srcNode.connect(workletNode);
-      workletNode.port.onmessage = (e) => onChunk(e.data.L, e.data.R);
-      scriptProcessor = workletNode;
-      log('Capture via AudioWorklet');
-    } else {
-      // Fallback iOS Safari : ScriptProcessor
+    if (IS_IOS_STANDALONE) {
+      // ── BRANCHE iOS STANDALONE ──────────────────────────────────────────
+      // createMediaElementSource est cassé dans ce mode.
+      // On utilise un ScriptProcessor alimenté manuellement via fetch+decode.
+      log('iOS standalone détecté');
+
       const sp = audioCtx.createScriptProcessor(BUFFER_SIZE, CHANNELS, CHANNELS);
-      const silentGain = audioCtx.createGain();
-      silentGain.gain.value = 0;
-      srcNode.connect(sp);
-      sp.connect(silentGain);
-      silentGain.connect(audioCtx.destination);
+      sp.connect(audioCtx.destination);
+      scriptProcessor = sp;
+
       sp.onaudioprocess = (e) => {
-        onChunk(
+        const Ldata = e.inputBuffer.getChannelData(0);
+        const Rdata = e.inputBuffer.getChannelData(1);
+        // Waveform manuel
+        for (let i = 0; i < dataArray.length && i < Ldata.length; i++) {
+          dataArray[i] = Math.round((Ldata[i] + 1) * 127.5);
+        }
+        // Mute géré ici (pas de monitorGain dans ce mode)
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const g = isMuted ? 0 : 1.0;
+        for (let i = 0; i < Ldata.length; i++) { outL[i] = Ldata[i] * g; outR[i] = Rdata[i] * g; }
+        onChunk(Ldata, Rdata);
+      };
+
+      streamAbort = new AbortController();
+      fetchAndStreamAudio(currentStream.url, audioCtx, sp, streamAbort.signal)
+        .catch(err => { if (err.name !== 'AbortError') { setStatus('error', err.message); log('Erreur: ' + err.message); }});
+
+    } else {
+      // ── BRANCHE STANDARD (Desktop, Android, iOS Safari normal) ──────────
+      audioEl = new Audio();
+      audioEl.crossOrigin = 'anonymous';
+      audioEl.src = currentStream.url;
+      audioEl.volume = 0.6;
+      audioEl.playsInline = true;
+
+      srcNode = audioCtx.createMediaElementSource(audioEl);
+      srcNode.connect(analyser);
+      analyser.connect(monitorGain);
+      monitorGain.connect(audioCtx.destination);
+
+      if (audioCtx.audioWorklet) {
+        const wBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+        const wURL  = URL.createObjectURL(wBlob);
+        await audioCtx.audioWorklet.addModule(wURL);
+        URL.revokeObjectURL(wURL);
+        const wNode = new AudioWorkletNode(audioCtx, 'pcm-capture', { numberOfInputs: 1, numberOfOutputs: 0, channelCount: CHANNELS });
+        srcNode.connect(wNode);
+        wNode.port.onmessage = (e) => onChunk(e.data.L, e.data.R);
+        scriptProcessor = wNode;
+        log('Capture via AudioWorklet');
+      } else {
+        const sp = audioCtx.createScriptProcessor(BUFFER_SIZE, CHANNELS, CHANNELS);
+        const silentGain = audioCtx.createGain(); silentGain.gain.value = 0;
+        srcNode.connect(sp); sp.connect(silentGain); silentGain.connect(audioCtx.destination);
+        sp.onaudioprocess = (e) => onChunk(
           new Float32Array(e.inputBuffer.getChannelData(0)),
           new Float32Array(e.inputBuffer.getChannelData(1))
         );
-      };
-      scriptProcessor = sp;
-      log('Capture via ScriptProcessor (iOS fallback)');
+        scriptProcessor = sp;
+        log('Capture via ScriptProcessor (fallback)');
+      }
+
+      await new Promise((resolve, reject) => { audioEl.oncanplay = resolve; audioEl.onerror = reject; audioEl.load(); });
+      await audioEl.play();
     }
 
-    await new Promise((resolve, reject) => {
-      audioEl.oncanplay = resolve;
-      audioEl.onerror   = reject;
-      audioEl.load();
-    });
-
-    // iOS : play() doit être appelé après resume() et dans la chaîne du geste
-    await audioEl.play();
     isBuffering = true;
 
     document.getElementById('btnTrigger').disabled = false;
@@ -720,10 +767,11 @@ function finalizeCapture() {
 
 // -- Mute --
 function toggleMute() {
-  if (!monitorGain) return;
+  if (!isBuffering) return;
   const btn = document.getElementById('btnMute');
   isMuted = !isMuted;
-  monitorGain.gain.value = isMuted ? 0 : 1.0;
+  // Mode standard : monitorGain; mode iOS standalone : géré dans onaudioprocess
+  if (monitorGain) monitorGain.gain.value = isMuted ? 0 : 1.0;
   btn.textContent = isMuted ? '🔊 Unmute' : '🔇 Mute';
   isMuted ? btn.classList.add('active') : btn.classList.remove('active');
 }
@@ -731,10 +779,11 @@ function toggleMute() {
 // -- Stop stream --
 function stopAll() {
   if (isCapturing) { clearInterval(recInterval); finalizeCapture(); return; }
+  if (streamAbort)     { streamAbort.abort(); streamAbort = null; }
   if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
-  if (srcNode)  srcNode.disconnect();
-  if (audioEl)  { audioEl.pause(); audioEl.src = ''; }
-  if (audioCtx) audioCtx.close();
+  if (srcNode)         { srcNode.disconnect(); srcNode = null; }
+  if (audioEl)         { audioEl.pause(); audioEl.src = ''; audioEl = null; }
+  if (audioCtx)        { audioCtx.close(); audioCtx = null; }
   if (prerollInterval) clearInterval(prerollInterval);
   if (animId) cancelAnimationFrame(animId);
   drawFlatLine();
