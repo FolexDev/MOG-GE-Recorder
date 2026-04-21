@@ -1128,7 +1128,7 @@ async function startStream() {
     }
 
     isBuffering = true;
-    setCapButtons(true, false);
+    if (!isCapturing) setCapButtons(true, false);
     showStreamControls(true);
     startVU();
     document.getElementById('corsNotice').style.display = 'none';
@@ -1145,8 +1145,11 @@ async function startStream() {
       if (!isCapturing) document.getElementById('progressBar').style.width = (prerollSec / PRE_ROLL * 100) + '%';
       if (prerollSec >= PRE_ROLL) {
         setStatus('ready', 'Pré-roll prêt (' + PRE_ROLL + 's) — prêt à capturer');
-        setCapButtons(true, false);
+        // Ne pas toucher aux boutons si un enregistrement est en cours
+        if (!isCapturing) setCapButtons(true, false);
         document.getElementById('prerollDisplay').className = 'timer-val rec';
+        // Une fois le preroll atteint, arrêter le setInterval (inutile de continuer)
+        clearInterval(prerollInterval); prerollInterval = null;
       }
     }, 1000);
 
