@@ -459,19 +459,48 @@ function drawFlatLine() {
   ctx2.stroke();
 }
 
-// -- Conversion Float32 → Int16 dithering TPDF --
+// -- Conversion Float32 → Int16 dithering TPDF avec noise shaping --
 function float32ToInt16Dithered(f32) {
   const out = new Int16Array(f32.length);
+  let prevErr = 0;
   for (let i=0; i<f32.length; i++) {
     let s = f32[i];
     if (s>1) s=1; if (s<-1) s=-1;
-    const dither = (Math.random()-0.5)+(Math.random()-0.5);
-    let val = Math.round(s*32767+dither);
+    const dither = (Math.random()-0.5)*0.3 + (Math.random()-0.5)*0.3;
+    let val = Math.round(s*32767 + dither + prevErr*0.5);
     if (val>32767) val=32767; if (val<-32768) val=-32768;
+    prevErr = s*32767 - val;
     out[i] = val;
   }
   return out;
 }
+
+// -- Worklet inline (remplace ScriptProcessor, élimine les glitches) --
+const WORKLET_CODE = `
+class PCMCapture extends AudioWorkletProcessor {
+  constructor() { super(); this._buf = [[], []]; this._size = 0; this._MAX = 4096; }
+  process(inputs) {
+    const inp = inputs[0];
+    if (!inp || !inp[0]) return true;
+    const L = inp[0], R = inp[1] || inp[0];
+    this._buf[0].push(new Float32Array(L));
+    this._buf[1].push(new Float32Array(R));
+    this._size += L.length;
+    if (this._size >= this._MAX) {
+      const flat = (ch) => {
+        const out = new Float32Array(this._size);
+        let off = 0;
+        for (const b of this._buf[ch]) { out.set(b, off); off += b.length; }
+        return out;
+      };
+      this.port.postMessage({ L: flat(0), R: flat(1) }, [flat(0).buffer, flat(1).buffer]);
+      this._buf = [[], []]; this._size = 0;
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-capture', PCMCapture);
+`;
 
 // -- Connexion stream --
 async function startStream() {
@@ -502,21 +531,25 @@ async function startStream() {
     analyser.connect(monitorGain);
     monitorGain.connect(audioCtx.destination);
 
-    scriptProcessor = audioCtx.createScriptProcessor(BUFFER_SIZE, CHANNELS, CHANNELS);
-    const silentGain = audioCtx.createGain();
-    silentGain.gain.value = 0;
-    srcNode.connect(scriptProcessor);
-    scriptProcessor.connect(silentGain);
-    silentGain.connect(audioCtx.destination);
+    // AudioWorklet — thread dédié, élimine les glitches du ScriptProcessor
+    const wBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    const wURL  = URL.createObjectURL(wBlob);
+    await audioCtx.audioWorklet.addModule(wURL);
+    URL.revokeObjectURL(wURL);
 
-    scriptProcessor.onaudioprocess = (e) => {
-      const L = new Float32Array(e.inputBuffer.getChannelData(0));
-      const R = new Float32Array(e.inputBuffer.getChannelData(1));
-      const chunk = { L, R };
+    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture', {
+      numberOfInputs: 1, numberOfOutputs: 0, channelCount: CHANNELS
+    });
+    srcNode.connect(workletNode);
+
+    workletNode.port.onmessage = (e) => {
+      const chunk = { L: e.data.L, R: e.data.R };
       ringPCM.push(chunk);
       if (ringPCM.length > MAX_RING_CHUNKS) ringPCM.shift();
       if (isCapturing) capturePCM.push(chunk);
     };
+
+    scriptProcessor = workletNode; // référence pour stopAll()
 
     await new Promise((resolve, reject) => {
       audioEl.oncanplay = resolve;
