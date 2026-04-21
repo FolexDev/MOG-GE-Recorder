@@ -778,13 +778,13 @@ function toggleMute() {
 
 // -- Stop stream --
 function teardownStream() {
-  if (streamAbort)     { streamAbort.abort(); streamAbort = null; }
-  if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
-  if (srcNode)         { srcNode.disconnect(); srcNode = null; }
-  if (audioEl)         { audioEl.pause(); audioEl.src = ''; audioEl = null; }
-  if (audioCtx)        { audioCtx.close(); audioCtx = null; }
-  if (prerollInterval) { clearInterval(prerollInterval); prerollInterval = null; }
-  if (animId)          { cancelAnimationFrame(animId); animId = null; }
+  try { if (streamAbort)     { streamAbort.abort(); streamAbort = null; } } catch(e) {}
+  try { if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; } } catch(e) {}
+  try { if (srcNode)         { srcNode.disconnect(); srcNode = null; } } catch(e) {}
+  try { if (audioEl)         { audioEl.pause(); audioEl.src = ''; audioEl = null; } } catch(e) {}
+  try { if (audioCtx)        { audioCtx.close(); audioCtx = null; } } catch(e) {}
+  try { if (prerollInterval) { clearInterval(prerollInterval); prerollInterval = null; } } catch(e) {}
+  try { if (animId)          { cancelAnimationFrame(animId); animId = null; } } catch(e) {}
   drawFlatLine();
   isBuffering = false;
   ringPCM = []; capturePCM = []; captureSnapshot = [];
@@ -794,7 +794,7 @@ function teardownStream() {
   document.getElementById('btnOneFM').disabled = false;
   document.getElementById('btnLac').disabled   = false;
   isMuted = false;
-  if (monitorGain) { monitorGain.gain.value = 1.0; monitorGain = null; }
+  try { if (monitorGain) { monitorGain.gain.value = 1.0; monitorGain = null; } } catch(e) {}
   const btnMute = document.getElementById('btnMute');
   btnMute.textContent = '🔇 Mute';
   btnMute.classList.remove('active');
@@ -805,9 +805,9 @@ function teardownStream() {
 function stopAll() {
   if (isCapturing) {
     clearInterval(recInterval);
-    finalizeCapture(); // encode + télécharge le clip en cours
+    isCapturing = false;
   }
-  teardownStream();   // coupe le stream dans tous les cas
+  teardownStream();
 }
 
 // -- Raccourci clavier Ctrl+Space --
