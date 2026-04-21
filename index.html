@@ -884,7 +884,7 @@ let postTarget    = 0;
 let MAX_RING_DYN  = Math.ceil((SAMPLE_RATE * (PRE_ROLL + 5)) / BUFFER_SIZE);
 
 let currentStream = null, pendingSwitch = null, switchTmt = null;
-let isBuffering = false, isCapturing = false, isMuted = false, isEncoding = false;
+let isBuffering = false, isCapturing = false, isMuted = false;
 let lameReady = false;
 
 let audioCtx, analyser, dataArray, monitorGain, scriptProcessor, audioEl, srcNode, streamAbort;
@@ -929,10 +929,8 @@ function showStreamControls(show) {
 }
 
 function setCapButtons(capEn, stopEn) {
-  const bt = document.getElementById('btnTrigger');
-  const bs = document.getElementById('btnStopCap');
-  if (bt) bt.disabled = !capEn;
-  if (bs) bs.disabled = !stopEn;
+  document.getElementById('btnTrigger').disabled = !capEn;
+  document.getElementById('btnStopCap').disabled = !stopEn;
 }
 
 // ── Pad / switch ───────────────────────────────────────────────────────────────
@@ -1055,9 +1053,8 @@ const onChunk = (L, R) => {
     capturePCM.push(c);
     // Sécurité : si enregistrement trop long, on arrête automatiquement
     if (capturePCM.length > MAX_CAP_CHUNKS) {
-      clearInterval(recInterval);
       log('Limite 30 min atteinte — finalisation automatique');
-      finalize();
+      setTimeout(finalize, 0); // sortir du contexte audio
     }
   }
   const rL = rms(c.L), rR = rms(c.R);
@@ -1161,27 +1158,19 @@ async function startStream() {
   }
 }
 
-// ── Capture ───────────────────────────────────────────────────────────────────
+// ── Capture ──────────────────────────────────────────────────────────────────
 function triggerCapture() {
-  if (isCapturing || isEncoding) return;
-
-  isCapturing = true;
-  captureSnapshot = ringPCM.slice();
+  if (isCapturing) return;
+  captureSnapshot = ringPCM.map(ch => ({ L: new Float32Array(ch.L), R: new Float32Array(ch.R) }));
   snapshotSec = Math.round(captureSnapshot.length * BUFFER_SIZE / SAMPLE_RATE);
-  capturePCM = [];
-
-  // UI : capturer OFF, stopper ON — directement sans passer par setCapButtons
-  document.getElementById('btnTrigger').disabled = true;
-  document.getElementById('btnStopCap').disabled = false;
+  capturePCM = []; isCapturing = true;
+  setCapButtons(false, true);
   const rl = document.getElementById('recLed'); if (rl) rl.classList.add('active');
-
   const pt = postTarget;
   setStatus('recording', pt === 0 ? 'Enregistrement en cours...' : 'Enregistrement — ' + pt + 's');
   recSec = 0;
   const rec = document.getElementById('recDisplay');
   rec.textContent = fmt(0); rec.className = 'timer-val rec';
-
-  if (recInterval) clearInterval(recInterval);
   recInterval = setInterval(() => {
     recSec++;
     document.getElementById('recDisplay').textContent = fmt(recSec);
@@ -1189,53 +1178,39 @@ function triggerCapture() {
       const rem = pt - recSec;
       document.getElementById('progressBar').style.width = Math.min(recSec / pt * 100, 100) + '%';
       if (rem > 0) setStatus('recording', 'Enregistrement — ' + rem + 's restantes');
-      if (recSec >= pt) { clearInterval(recInterval); recInterval = null; finalize(); }
+      if (recSec >= pt) { clearInterval(recInterval); finalize(); }
     } else {
       setStatus('recording', 'Enregistrement — ' + fmt(recSec) + ' (stop manuel)');
     }
   }, 1000);
 }
 
-function stopCapture() {
-  if (!isCapturing) return;
-  isCapturing = false;
-  if (recInterval) { clearInterval(recInterval); recInterval = null; }
-
-  // UI : stopper OFF immédiatement
-  document.getElementById('btnStopCap').disabled = true;
-  document.getElementById('btnTrigger').disabled = true;
-  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
-
-  finalize();
-}
+function stopCapture() { if (!isCapturing) return; clearInterval(recInterval); finalize(); }
 
 // ── Encodage MP3 ──────────────────────────────────────────────────────────────
 function encodeMp3(chunks) {
-  const enc = new lamejs.Mp3Encoder(CHANNELS, SAMPLE_RATE, BITRATE);
-  const data = [];
-  // Traitement par batch de 50 chunks pour éviter les microfreezes
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    const e = enc.encodeBuffer(f32ToI16(chunk.L), f32ToI16(chunk.R));
-    if (e.length > 0) data.push(new Uint8Array(e));
-  }
-  const f = enc.flush();
-  if (f.length > 0) data.push(new Uint8Array(f));
+  const enc = new lamejs.Mp3Encoder(CHANNELS, SAMPLE_RATE, BITRATE); const data = [];
+  for (const ch of chunks) { const e = enc.encodeBuffer(f32ToI16(ch.L), f32ToI16(ch.R)); if (e.length > 0) data.push(new Uint8Array(e)); }
+  const f = enc.flush(); if (f.length > 0) data.push(new Uint8Array(f));
   return new Blob(data, { type: 'audio/mpeg' });
 }
 
 function finalize() {
+  // Tout couper IMMÉDIATEMENT — avant tout setTimeout
   isCapturing = false;
-  isEncoding  = true;  // bloque tout nouveau déclenchement pendant l'encodage
   if (recInterval) { clearInterval(recInterval); recInterval = null; }
-  document.getElementById('btnStopCap').disabled = true;
-  document.getElementById('btnTrigger').disabled = true;
-  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
+  capturePCM = capturePCM.slice(); // snapshot final
+  captureSnapshot = captureSnapshot.slice();
+  setCapButtons(false, false); // les deux boutons disabled pendant l'encodage
   setStatus('done', 'Encodage MP3...');
-  const allChunks = captureSnapshot.concat(capturePCM);
+  const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
+
+  // Copier les données avant de vider (onChunk peut encore tourner)
+  const allChunks = [...captureSnapshot, ...capturePCM];
+  const snapSec = snapshotSec;
+  const rSec = recSec;
   captureSnapshot = []; capturePCM = [];
 
-  // Laisser le navigateur respirer 100ms avant l'encodage bloquant
   setTimeout(() => {
     try {
       const blob = encodeMp3(allChunks);
@@ -1246,25 +1221,22 @@ function finalize() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      const total = fmt(snapshotSec + recSec);
+      const total = fmt(snapSec + rSec);
       const list = document.getElementById('filesList');
       const item = document.createElement('div'); item.className = 'file-item';
-      item.innerHTML = `<div><div class="file-name">${filename}</div><div class="file-meta">${sizekb} KB · ${total} · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="${url}" download="${filename}">↓ DL</a>`;
+      item.innerHTML = '<div><div class="file-name">'+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'">↓ DL</a>';
       list.insertBefore(item, list.firstChild);
-      setStatus('done', 'Clip prêt — ' + (blob.size / 1024 / 1024).toFixed(1) + ' MB');
-      log('Enregistré — ' + filename + ' (' + sizekb + ' KB · ' + total + ')');
-    } catch(err) {
-      setStatus('error', 'Erreur encodage: ' + err.message);
-      log('Erreur: ' + err.message);
-    } finally {
-      isEncoding = false;  // libérer dans tous les cas
-      // Remettre Capturer disponible seulement si le stream est encore actif
-      if (isBuffering) {
-        document.getElementById('btnTrigger').disabled = false;
-      }
+      setStatus('done', 'Clip prêt — '+(blob.size/1024/1024).toFixed(1)+' MB');
+      log('Enregistré — '+filename+' ('+sizekb+' KB · '+total+')');
       document.getElementById('progressBar').style.width = '100%';
+    } catch(err) {
+      setStatus('error', 'Erreur encodage: '+err.message);
+      log('Erreur: '+err.message);
+    } finally {
+      // Réactiver Capturer seulement si le stream est toujours actif
+      if (isBuffering) setCapButtons(true, false);
     }
-  }, 100);
+  }, 50);
 }
 
 // ── Mute ──────────────────────────────────────────────────────────────────────
@@ -1290,7 +1262,7 @@ function teardown() {
   try { if (audioCtx)        { audioCtx.close();            audioCtx = null;       } } catch(e) {}
   try { if (prerollInterval) { clearInterval(prerollInterval); prerollInterval = null; } } catch(e) {}
   stopVU();
-  isBuffering = false; isMuted = false; isEncoding = false; isCapturing = false;
+  isBuffering = false; isMuted = false;  isCapturing = false;
   ringPCM = []; capturePCM = []; captureSnapshot = [];
   setCapButtons(false, false);
   showStreamControls(false);
