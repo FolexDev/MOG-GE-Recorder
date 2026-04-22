@@ -27,8 +27,8 @@
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 0.75rem 0.5rem 2rem;
+      align-items: stretch;
+      padding: 0;
       width: 100%;
       max-width: 100%;
       overflow-x: hidden;
@@ -89,8 +89,8 @@
 
     /* ── Shell ── */
     .shell {
-      width: 100%;
-      max-width: 520px;
+      width: min(520px, 100%);
+      max-width: 100%;
       box-sizing: border-box;
       background: #1a1c22;
       border: 1px solid #32363f;
@@ -1799,6 +1799,7 @@ async function startStream() {
     if (!isCapturing) setCapButtons(true, false);
     showStreamControls(true);
     startVU();
+    setTimeout(initDimNode, 100); // init DIM après que audioCtx soit stable
     document.getElementById('corsNotice').style.display = 'none';
     setStatus('buffering', 'Stream actif — accumulation du pré-roll...');
 
@@ -2086,21 +2087,28 @@ let dimManual = false;
 let dimGainNode = null;
 
 function initDimNode() {
-  if (!audioCtx || dimGainNode) return;
+  if (!audioCtx || !monitorGain) return;
+  // Recréer si l'audioCtx a changé (après restart du stream)
+  if (dimGainNode && dimGainNode.context !== audioCtx) dimGainNode = null;
+  if (dimGainNode) return;
   dimGainNode = audioCtx.createGain();
-  dimGainNode.gain.value = 1.0;
-  if (monitorGain) {
-    try { monitorGain.disconnect(); } catch(e) {}
-    monitorGain.connect(dimGainNode);
-    dimGainNode.connect(audioCtx.destination);
-  }
+  dimGainNode.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
+  try { monitorGain.disconnect(); } catch(e) {}
+  monitorGain.connect(dimGainNode);
+  dimGainNode.connect(audioCtx.destination);
 }
 
 function applyDim() {
-  initDimNode();
   const btn = document.getElementById('btnDim');
-  if (dimGainNode) dimGainNode.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
   if (btn) isDimmed ? btn.classList.add('dimmed') : btn.classList.remove('dimmed');
+  // Tenter d'initialiser si pas encore fait
+  if (!dimGainNode && audioCtx && monitorGain) initDimNode();
+  if (dimGainNode) {
+    dimGainNode.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
+  } else if (monitorGain) {
+    // Fallback si dimGainNode indisponible : agir directement sur monitorGain
+    monitorGain.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
+  }
   paintVU(peakL, peakR);
 }
 
@@ -2529,24 +2537,131 @@ function edZoom(z) {
     ED.curPos = sec; edPlayStop();
   });
 
-  let touchStartX = null, touchStartTime = null, lastTap = 0;
+  // ── Gestes tactiles waveform ─────────────────────────────────────────────
+  // États
+  let _t1X = 0, _t1Y = 0, _t1Time = 0;   // premier touch
+  let _lastTap = 0;                         // pour détecter double-tap
+  let _pinchDist0 = null, _pinchZoom0 = null, _pinchMidSec = null; // pinch-zoom
+  let _swipeScrollOff0 = null, _swipeX0 = null;  // swipe scroll
+  let _dtapX = null, _dtapSec = null;             // double-tap + drag → IN/OUT
+  let _dtapActive = false;
+
   container.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) { touchStartX = e.touches[0].clientX; touchStartTime = Date.now(); }
-  }, { passive: true });
+    if (!ED.buffer) return;
+
+    if (e.touches.length === 2) {
+      // ── Pinch : initialiser ──────────────────────────────────────────────
+      e.preventDefault();
+      _pinchDist0 = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      _pinchZoom0 = ED.zoom;
+      const rect = container.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      _pinchMidSec = edXToSec(midX, rect.width);
+      _dtapActive = false;
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      _t1X    = e.touches[0].clientX;
+      _t1Y    = e.touches[0].clientY;
+      _t1Time = Date.now();
+      _swipeScrollOff0 = ED.scrollOff;
+      _swipeX0 = _t1X;
+
+      // Détecter le double-tap → mode sélection IN/OUT par drag
+      const now = Date.now();
+      if (now - _lastTap < 350) {
+        const rect = container.getBoundingClientRect();
+        const sec  = Math.max(0, Math.min(edXToSec(_t1X - rect.left, rect.width), ED.duration));
+        _dtapActive = true;
+        _dtapX   = _t1X;
+        _dtapSec = sec;
+        ED.inPoint = sec; ED.outPoint = sec;
+        edUpdateRegion(); edDrawWave();
+        e.preventDefault();
+      } else {
+        _dtapActive = false;
+      }
+      _lastTap = now;
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!ED.buffer) return;
+    e.preventDefault();
+
+    if (e.touches.length === 2 && _pinchDist0 !== null) {
+      // ── Pinch-zoom centré sur le point médian ────────────────────────────
+      const newDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale   = newDist / _pinchDist0;
+      const newZoom = Math.max(1, Math.min(20, _pinchZoom0 * scale));
+      ED.zoom = newZoom;
+      const rect     = container.getBoundingClientRect();
+      const midX     = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const viewDur  = ED.duration / newZoom;
+      ED.scrollOff   = Math.max(0, Math.min(_pinchMidSec - (midX / rect.width) * viewDur, ED.duration - viewDur));
+      edUpdateZoomUI(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+      ED.userScrolled = true;
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const dx  = e.touches[0].clientX - _t1X;
+      const adx = Math.abs(dx);
+      const ady = Math.abs(e.touches[0].clientY - _t1Y);
+
+      if (_dtapActive) {
+        // ── Double-tap + drag → sélection IN/OUT ──────────────────────────
+        const rect = container.getBoundingClientRect();
+        const sec  = Math.max(0, Math.min(edXToSec(e.touches[0].clientX - rect.left, rect.width), ED.duration));
+        ED.inPoint  = Math.min(_dtapSec, sec);
+        ED.outPoint = Math.max(_dtapSec, sec);
+        ED.curPos   = sec;
+        edUpdateRegion(); edDrawWave();
+      } else if (adx > 6 && adx > ady && ED.zoom > 1) {
+        // ── Swipe horizontal → scroll ─────────────────────────────────────
+        const rect    = container.getBoundingClientRect();
+        const viewDur = ED.duration / ED.zoom;
+        const secPerPx = viewDur / rect.width;
+        const newOff   = Math.max(0, Math.min(_swipeScrollOff0 - dx * secPerPx, ED.duration - viewDur));
+        ED.scrollOff   = newOff;
+        edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+        ED.userScrolled = true;
+      }
+    }
+  }, { passive: false });
+
   container.addEventListener('touchend', (e) => {
     if (!ED.buffer) return;
-    if (e.changedTouches.length !== 1) return;
-    const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
-    const dur = Date.now() - touchStartTime;
-    const now = Date.now();
-    if (dx < 10 && dur < 300) {
-      const rect = container.getBoundingClientRect();
-      const sec = Math.max(0, Math.min(edXToSec(e.changedTouches[0].clientX - rect.left, rect.width), ED.duration));
-      if (now - lastTap < 350) { if (ED.playing) edStop(); ED.curPos = sec; edPlayStop(); }
-      else { ED.curPos = sec; edUpdateCursor(); }
-      lastTap = now;
+
+    if (_pinchDist0 !== null) {
+      _pinchDist0 = null; _pinchZoom0 = null;
+      return;
     }
-  }, { passive: true });
+
+    if (_dtapActive) {
+      _dtapActive = false;
+      return;
+    }
+
+    // Tap simple → placer la tête de lecture
+    if (e.changedTouches.length === 1) {
+      const dx  = Math.abs(e.changedTouches[0].clientX - _t1X);
+      const dur = Date.now() - _t1Time;
+      if (dx < 10 && dur < 300) {
+        const rect = container.getBoundingClientRect();
+        const sec  = Math.max(0, Math.min(edXToSec(e.changedTouches[0].clientX - rect.left, rect.width), ED.duration));
+        ED.curPos  = sec;
+        edUpdateCursor();
+      }
+    }
+  }, { passive: false });
 
   container.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -2815,36 +2930,44 @@ async function mixWithJingles(contentBuffer) {
 
 // ── Forcer l'app à remplir l'écran sur mobile ─────────────────────────────────
 (function forceMobileScale() {
-  const shell = document.querySelector('.shell');
-  if (!shell) return;
-
   function fit() {
-    const vw = window.innerWidth;
-    if (vw >= 540) {
-      shell.style.transform = '';
-      shell.style.transformOrigin = '';
-      shell.style.width = '';
-      shell.style.marginLeft = '';
-      return;
+    // Détecter le vrai écran physique — résout le mode "Site de bureau" sur Android
+    const screenCssW = screen.width / (window.devicePixelRatio || 1);
+    const reportedW  = document.documentElement.clientWidth;
+    // Si Chrome est en mode desktop, reportedW >> screenCssW → on utilise screenCssW
+    const vw = (reportedW > screenCssW * 1.3 && screenCssW < 540) ? screenCssW : reportedW;
+    const isDesktop = vw >= 540;
+
+    const html  = document.documentElement;
+    const body  = document.body;
+    const shell = document.querySelector('.shell');
+    if (!shell) return;
+
+    html.style.cssText  = 'overflow-x:hidden;width:100%;';
+    body.style.cssText  = 'overflow-x:hidden;width:100%;margin:0;padding:0;display:flex;flex-direction:column;align-items:' + (isDesktop ? 'center' : 'stretch') + ';';
+
+    if (isDesktop) {
+      shell.style.cssText = '';
+    } else {
+      shell.style.cssText = [
+        'width:' + vw + 'px',
+        'max-width:' + vw + 'px',
+        'min-width:0',
+        'margin:0',
+        'border-radius:0',
+        'border-left:none',
+        'border-right:none',
+        'box-shadow:none',
+        'box-sizing:border-box',
+      ].join(';') + ';';
     }
-    // Sur mobile : étirer le shell à la largeur de l'écran
-    shell.style.width = vw + 'px';
-    shell.style.maxWidth = vw + 'px';
-    shell.style.marginLeft = '0';
-    shell.style.marginRight = '0';
-    shell.style.borderRadius = '0';
-    shell.style.borderLeft = 'none';
-    shell.style.borderRight = 'none';
-    document.body.style.padding = '0';
-    document.body.style.margin = '0';
-    document.body.style.alignItems = 'stretch';
-    document.documentElement.style.overflowX = 'hidden';
-    document.body.style.overflowX = 'hidden';
   }
 
+  // Exécuter immédiatement ET après chaque changement
   fit();
+  window.addEventListener('load', fit);
   window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', () => setTimeout(fit, 100));
+  window.addEventListener('orientationchange', () => setTimeout(fit, 200));
 })();
 
 </script>
