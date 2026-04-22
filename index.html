@@ -626,7 +626,8 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -2px 0 rgba(0,0,0,0.35), 0 0 8px rgba(245,160,0,0.1);
     }
     .tr-btn.export:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 14px rgba(245,160,0,0.25); }
-    .tr-sep { flex: 1; }
+    .tr-group { display: flex; align-items: center; gap: 4px; }
+    .tr-sep { width: 1px; height: 20px; background: #1e2030; flex-shrink: 0; margin: 0 4px; }
     .tr-region-time {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 8px; color: #505668; letter-spacing: 0.04em;
@@ -1082,17 +1083,29 @@
         <span class="wave-zoom-val" id="waveZoomVal">1×</span>
       </div>
       <div class="transport">
-        <span class="tr-time" id="trTime">00:00.0</span>
-        <button class="tr-btn" id="trRewind"  onclick="edRewind()" title="Début">⏮</button>
-        <button class="tr-btn" id="trPlay"    onclick="edPlayStop()" title="Play/Stop">▶</button>
+        <!-- Groupe 1 : Navigation -->
+        <div class="tr-group">
+          <span class="tr-time" id="trTime">00:00.0</span>
+          <button class="tr-btn" id="trRewind"  onclick="edRewind()" title="Début [D]">⏮</button>
+          <button class="tr-btn" id="trPlay"    onclick="edPlayStop()" title="Play/Stop [Espace]">▶</button>
+        </div>
         <div class="tr-sep"></div>
-        <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
-        <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
-        <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
-        <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>DEL</button>
-        <button class="tr-btn" id="trUndo" onclick="edUndo()" title="Annuler [Ctrl+Z]" disabled>Undo</button>
-        <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection [E]" disabled>↓ Export</button>
-        <span class="tr-region-time" id="trRegionTime"></span>
+        <!-- Groupe 2 : Points IN/OUT -->
+        <div class="tr-group">
+          <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
+          <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
+          <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
+          <span class="tr-region-time" id="trRegionTime"></span>
+        </div>
+        <div class="tr-sep"></div>
+        <!-- Groupe 3 : DEL / Undo -->
+        <div class="tr-group">
+          <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>DEL</button>
+          <button class="tr-btn" id="trUndo"   onclick="edUndo()"         title="Annuler [Ctrl+Z]" disabled>Undo</button>
+        </div>
+        <div class="tr-sep"></div>
+        <!-- Export seul -->
+        <button class="tr-btn export" onclick="edExport()" id="trExport" title="Exporter [E]" disabled>↓ Export</button>
       </div>
     </div>
 
@@ -2024,6 +2037,513 @@ document.addEventListener('keydown', (e) => {
     case 'E': e.preventDefault(); if (ED.buffer && ED.inPoint !== null && ED.outPoint !== null) edExport(); break;
   }
 });
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DIM -15dB
+// ══════════════════════════════════════════════════════════════════════════════
+let isDimmed = false;
+let dimManual = false;
+let dimGainNode = null;
+
+function initDimNode() {
+  if (!audioCtx || dimGainNode) return;
+  dimGainNode = audioCtx.createGain();
+  dimGainNode.gain.value = 1.0;
+  if (monitorGain) {
+    try { monitorGain.disconnect(); } catch(e) {}
+    monitorGain.connect(dimGainNode);
+    dimGainNode.connect(audioCtx.destination);
+  }
+}
+
+function applyDim() {
+  initDimNode();
+  const btn = document.getElementById('btnDim');
+  if (dimGainNode) dimGainNode.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
+  if (btn) isDimmed ? btn.classList.add('dimmed') : btn.classList.remove('dimmed');
+  paintVU(peakL, peakR);
+}
+
+function toggleDim() {
+  isDimmed = !isDimmed;
+  dimManual = isDimmed;
+  if (isDimmed && isMuted) {
+    isMuted = false;
+    if (monitorGain) monitorGain.gain.value = 1.0;
+    const bm = document.getElementById('btnMuteConsole');
+    if (bm) bm.classList.remove('muted');
+  }
+  applyDim();
+}
+
+function autoDim(play) {
+  if (dimManual) return;
+  if (isBuffering && !isMuted) {
+    isDimmed = play;
+    applyDim();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ÉDITEUR AUDIO
+// ══════════════════════════════════════════════════════════════════════════════
+const ED = {
+  audioCtx: null, buffer: null, source: null, blob: null, filename: '',
+  duration: 0, playing: false, startTime: 0, startOff: 0, curPos: 0,
+  inPoint: null, outPoint: null, zoom: 1, scrollOff: 0, rafId: null,
+  peaks: null, userScrolled: false, playOrigin: undefined, undoStack: [],
+};
+
+function fmtMs(s) {
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1).padStart(4, '0');
+  return String(m).padStart(2,'0') + ':' + sec;
+}
+
+async function edOpen(blob, filename) {
+  ED.blob = blob; ED.filename = filename;
+  ED.inPoint = null; ED.outPoint = null; ED.curPos = 0;
+  ED.startOff = 0; ED.zoom = 1; ED.scrollOff = 0; ED.undoStack = [];
+  document.getElementById('audioEditor').classList.add('visible');
+  document.getElementById('editorFilename').textContent = filename;
+  document.getElementById('waveMarkerStart').style.display = 'none';
+  document.getElementById('waveMarkerEnd').style.display   = 'none';
+  document.getElementById('waveRegion').style.display      = 'none';
+  document.getElementById('trExport').disabled = true;
+  const td = document.getElementById('trDelete'); if (td) td.disabled = true;
+  const tu = document.getElementById('trUndo');   if (tu) tu.disabled = true;
+  document.getElementById('trRegionTime').textContent = '';
+  if (!ED.audioCtx) ED.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ED.audioCtx.state === 'suspended') await ED.audioCtx.resume();
+  try {
+    const ab = await blob.arrayBuffer();
+    ED.buffer = await ED.audioCtx.decodeAudioData(ab);
+    ED.duration = ED.buffer.duration;
+    edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateZoomUI(); edUpdateCursor(); edUpdateScrollbar();
+    document.getElementById('trTime').textContent = fmtMs(0);
+  } catch(e) { log('Éditeur: erreur décodage — ' + e.message); }
+}
+
+function edBuildPeaks() {
+  const canvas = document.getElementById('waveEditor');
+  const W = canvas.offsetWidth || 400;
+  const data = ED.buffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  ED.peaks = new Float32Array(W);
+  for (let i = 0; i < W; i++) {
+    let max = 0;
+    for (let j = i*step; j < Math.min((i+1)*step, data.length); j++) {
+      const v = Math.abs(data[j]); if (v > max) max = v;
+    }
+    ED.peaks[i] = max;
+  }
+}
+
+function edDrawWave() {
+  const canvas = document.getElementById('waveEditor');
+  canvas.width = canvas.offsetWidth || 400;
+  canvas.height = canvas.offsetHeight || 80;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#090a0d'; ctx.fillRect(0, 0, W, H);
+  if (!ED.peaks) return;
+  const viewDur  = ED.duration / ED.zoom;
+  const startFrac = ED.scrollOff / ED.duration;
+  const endFrac   = Math.min(ED.scrollOff + viewDur, ED.duration) / ED.duration;
+  const startPeak = Math.floor(startFrac * ED.peaks.length);
+  const endPeak   = Math.ceil(endFrac * ED.peaks.length);
+  const nPeaks    = endPeak - startPeak;
+  ctx.strokeStyle = '#1a1c22'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+  ctx.fillStyle = '#3a5060';
+  const px = W / nPeaks;
+  for (let i = 0; i < nPeaks; i++) {
+    const peak = ED.peaks[startPeak + i] || 0;
+    const h = Math.max(2, peak * H * 0.9);
+    ctx.fillRect(i * px, (H - h) / 2, Math.max(1, px - 0.5), h);
+  }
+  if (ED.inPoint !== null && ED.outPoint !== null) {
+    const i1 = Math.min(ED.inPoint, ED.outPoint);
+    const i2 = Math.max(ED.inPoint, ED.outPoint);
+    const x1 = edSecToX(i1, W); const x2 = edSecToX(i2, W);
+    ctx.fillStyle = 'rgba(0,184,150,0.1)'; ctx.fillRect(x1, 0, x2-x1, H);
+    ctx.strokeStyle = '#00b896'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1,0); ctx.lineTo(x1,H); ctx.stroke();
+    ctx.strokeStyle = '#dc0814';
+    ctx.beginPath(); ctx.moveTo(x2,0); ctx.lineTo(x2,H); ctx.stroke();
+    ctx.font = '9px IBM Plex Mono,monospace';
+    ctx.fillStyle = '#00b896'; ctx.textAlign = 'left'; ctx.fillText('IN', x1+3, 12);
+    ctx.fillStyle = '#dc0814'; ctx.textAlign = 'right'; ctx.fillText('OUT', x2-3, 12);
+    ctx.textAlign = 'left';
+  } else if (ED.inPoint !== null) {
+    const x = edSecToX(ED.inPoint, W);
+    ctx.strokeStyle = '#00b896'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.font = '9px IBM Plex Mono,monospace'; ctx.fillStyle = '#00b896'; ctx.fillText('IN', x+3, 12);
+  }
+  const cx = edSecToX(ED.curPos, W);
+  ctx.strokeStyle = '#f5a000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+}
+
+function edSecToX(sec, W) {
+  const viewDur = ED.duration / ED.zoom;
+  return Math.round(((sec - ED.scrollOff) / viewDur) * W);
+}
+function edXToSec(x, W) {
+  const viewDur = ED.duration / ED.zoom;
+  return ED.scrollOff + (x / W) * viewDur;
+}
+
+function edDrawTimecode() {
+  const canvas = document.getElementById('waveTimecode');
+  canvas.width = canvas.offsetWidth || 400; canvas.height = 14;
+  const W = canvas.width;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0a0b0e'; ctx.fillRect(0, 0, W, 14);
+  const viewDur = ED.duration / ED.zoom;
+  const intervals = [0.5,1,2,5,10,30,60];
+  const minPx = 50;
+  let tick = intervals.find(i => (i/viewDur)*W >= minPx) || 60;
+  const start = Math.ceil(ED.scrollOff / tick) * tick;
+  ctx.font = '7px IBM Plex Mono,monospace'; ctx.fillStyle = '#505668'; ctx.strokeStyle = '#1a1c22';
+  for (let t = start; t <= ED.scrollOff + viewDur; t += tick) {
+    const x = edSecToX(t, W);
+    ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, 14); ctx.stroke();
+    ctx.fillText(fmtMs(t), x+2, 10);
+  }
+}
+
+function edUpdateScrollbar() {
+  const bar = document.getElementById('waveScrollbar');
+  const thumb = document.getElementById('waveScrollThumb');
+  const W = bar.offsetWidth || 400;
+  const thumbW = Math.max(20, W / ED.zoom);
+  const maxOff = ED.duration - ED.duration / ED.zoom;
+  const pos = maxOff > 0 ? (ED.scrollOff / maxOff) * (W - thumbW) : 0;
+  thumb.style.width = thumbW + 'px'; thumb.style.left = pos + 'px';
+}
+
+function edUpdateZoomUI() {
+  const pct = ((ED.zoom - 1) / 19) * 100;
+  document.getElementById('waveZoomFill').style.width = pct + '%';
+  document.getElementById('waveZoomVal').textContent = ED.zoom.toFixed(1) + '×';
+}
+
+function edUpdateCursor() {
+  document.getElementById('trTime').textContent = fmtMs(ED.curPos);
+  edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+}
+
+function edPlayStop() {
+  if (!ED.buffer) return;
+  if (ED.playing) { edStop(); return; }
+  if (ED.audioCtx.state === 'suspended') ED.audioCtx.resume();
+  ED.source = ED.audioCtx.createBufferSource();
+  ED.source.buffer = ED.buffer;
+  ED.source.connect(ED.audioCtx.destination);
+  const startPos = (ED.curPos >= ED.duration) ? (ED.inPoint || 0) : ED.curPos;
+  ED.playOrigin = startPos;
+  ED.startOff = startPos; ED.startTime = ED.audioCtx.currentTime;
+  ED.source.start(0, startPos);
+  ED.playing = true;
+  autoDim(true);
+  const btn = document.getElementById('trPlay');
+  btn.textContent = '⏸'; btn.classList.add('active');
+  ED.source.onended = () => { if (ED.playing) edStop(); };
+  if (ED.outPoint !== null && startPos < ED.outPoint) {
+    ED.source.stop(ED.audioCtx.currentTime + (ED.outPoint - startPos));
+  }
+  ED.userScrolled = false;
+  function tick() {
+    if (!ED.playing) return;
+    ED.curPos = Math.min(ED.startOff + (ED.audioCtx.currentTime - ED.startTime), ED.duration);
+    if (!ED.userScrolled) {
+      const viewDur = ED.duration / ED.zoom;
+      if (ED.curPos > ED.scrollOff + viewDur * 0.9)
+        ED.scrollOff = Math.min(ED.curPos - viewDur * 0.1, ED.duration - viewDur);
+    }
+    edUpdateCursor();
+    ED.rafId = requestAnimationFrame(tick);
+  }
+  ED.rafId = requestAnimationFrame(tick);
+}
+
+function edStop() {
+  ED.playing = false;
+  if (ED.source) { try { ED.source.stop(); } catch(e) {} ED.source = null; }
+  if (ED.rafId)  { cancelAnimationFrame(ED.rafId); ED.rafId = null; }
+  if (ED.playOrigin !== undefined) { ED.curPos = ED.playOrigin; ED.playOrigin = undefined; }
+  autoDim(false);
+  const btn = document.getElementById('trPlay');
+  btn.textContent = '▶'; btn.classList.remove('active');
+  edUpdateCursor();
+}
+
+function edRewind() {
+  const wasPlaying = ED.playing;
+  if (ED.playing) edStop();
+  ED.curPos = ED.inPoint || 0; ED.scrollOff = 0;
+  edUpdateCursor();
+  if (wasPlaying) edPlayStop();
+}
+
+function edSetStart() {
+  if (!ED.buffer) return;
+  edPushUndo();
+  ED.inPoint = ED.curPos;
+  if (ED.outPoint !== null && ED.inPoint >= ED.outPoint) ED.outPoint = null;
+  edUpdateRegion(); edDrawWave();
+}
+
+function edSetEnd() {
+  if (!ED.buffer) return;
+  edPushUndo();
+  ED.outPoint = ED.curPos;
+  if (ED.inPoint !== null && ED.outPoint <= ED.inPoint) ED.inPoint = null;
+  edUpdateRegion(); edDrawWave();
+}
+
+function edUpdateRegion() {
+  const hasRegion = ED.inPoint !== null && ED.outPoint !== null;
+  document.getElementById('trExport').disabled = !hasRegion;
+  const td = document.getElementById('trDelete'); if (td) td.disabled = !hasRegion;
+  if (hasRegion) {
+    document.getElementById('trRegionTime').textContent = fmtMs(Math.abs(ED.outPoint - ED.inPoint));
+  } else {
+    document.getElementById('trRegionTime').textContent = '';
+  }
+}
+
+async function edExport() {
+  if (ED.inPoint === null || ED.outPoint === null) return;
+  const base = ED.filename.replace(/\.mp3$/i, '');
+  const ds   = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  document.getElementById('renameInput').value = base + '_edit_' + ds;
+  document.getElementById('renameDialog').classList.add('open');
+  setTimeout(() => { const inp = document.getElementById('renameInput'); inp.focus(); inp.select(); }, 80);
+}
+
+function renameCancel() { document.getElementById('renameDialog').classList.remove('open'); }
+function renameConfirm() {
+  const rawName = document.getElementById('renameInput').value.trim();
+  if (!rawName) return;
+  const fname = rawName.replace(/\.mp3$/i, '') + '.mp3';
+  document.getElementById('renameDialog').classList.remove('open');
+  edDoExport(fname);
+}
+
+async function edDoExport(fname) {
+  if (ED.inPoint === null || ED.outPoint === null) return;
+  const i1 = Math.min(ED.inPoint, ED.outPoint);
+  const i2 = Math.max(ED.inPoint, ED.outPoint);
+  const sr = ED.buffer.sampleRate; const ch = ED.buffer.numberOfChannels;
+  const s1 = Math.floor(i1 * sr); const s2 = Math.floor(i2 * sr); const len = s2 - s1;
+  const tmpBuf = ED.audioCtx.createBuffer(ch, len, sr);
+  for (let ci = 0; ci < ch; ci++) tmpBuf.copyToChannel(ED.buffer.getChannelData(ci).subarray(s1, s2), ci);
+  setStatus('done', 'Export MP3...');
+  await new Promise(r => setTimeout(r, 20));
+  try {
+    const L = tmpBuf.getChannelData(0); const R = ch > 1 ? tmpBuf.getChannelData(1) : L;
+    const enc = new lamejs.Mp3Encoder(2, sr, BITRATE);
+    const data = []; const CHUNK = 1152;
+    for (let i = 0; i < L.length; i += CHUNK) {
+      const e = enc.encodeBuffer(f32ToI16(L.subarray(i, i+CHUNK)), f32ToI16(R.subarray(i, i+CHUNK)));
+      if (e.length > 0) data.push(new Uint8Array(e));
+    }
+    const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
+    const blob = new Blob(data, { type: 'audio/mpeg' });
+    await downloadOrSave(blob, fname);
+    setStatus('done', 'Export — ' + (blob.size/1024).toFixed(0) + ' KB');
+    log('Export → ' + fname);
+  } catch(e) { setStatus('error', 'Erreur export: ' + e.message); }
+}
+
+function edClearRegion() {
+  edPushUndo();
+  ED.inPoint = null; ED.outPoint = null;
+  edUpdateRegion(); edDrawWave();
+}
+
+function edPushUndo() {
+  if (!ED.undoStack) ED.undoStack = [];
+  ED.undoStack.push({ buffer: ED.buffer, duration: ED.duration, curPos: ED.curPos, inPoint: ED.inPoint, outPoint: ED.outPoint });
+  if (ED.undoStack.length > 10) ED.undoStack.shift();
+  const tu = document.getElementById('trUndo'); if (tu) tu.disabled = false;
+}
+
+function edUndo() {
+  if (!ED.undoStack || !ED.undoStack.length) return;
+  const state = ED.undoStack.pop();
+  if (ED.playing) edStop();
+  ED.buffer = state.buffer; ED.duration = state.duration; ED.curPos = state.curPos;
+  ED.inPoint = state.inPoint; ED.outPoint = state.outPoint;
+  edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar(); edUpdateRegion(); edUpdateCursor();
+  const tu = document.getElementById('trUndo'); if (tu) tu.disabled = !ED.undoStack.length;
+  log('Undo');
+}
+
+function edDeleteRegion() {
+  if (!ED.buffer || ED.inPoint === null || ED.outPoint === null) return;
+  edPushUndo();
+  const sr = ED.buffer.sampleRate; const ch = ED.buffer.numberOfChannels;
+  const i1 = Math.min(ED.inPoint, ED.outPoint); const i2 = Math.max(ED.inPoint, ED.outPoint);
+  const s1 = Math.floor(i1 * sr); const s2 = Math.floor(i2 * sr);
+  const len = ED.buffer.length - (s2 - s1); if (len <= 0) return;
+  const newBuf = ED.audioCtx.createBuffer(ch, len, sr);
+  for (let ci = 0; ci < ch; ci++) {
+    const src = ED.buffer.getChannelData(ci); const dst = newBuf.getChannelData(ci);
+    dst.set(src.subarray(0, s1), 0); dst.set(src.subarray(s2), s1);
+  }
+  if (ED.playing) edStop();
+  ED.buffer = newBuf; ED.duration = newBuf.duration;
+  ED.curPos = Math.min(i1, ED.duration); ED.inPoint = null; ED.outPoint = null;
+  edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar(); edUpdateRegion(); edUpdateCursor();
+  log('Zone supprimée — ' + fmtMs(i2 - i1));
+}
+
+function toggleShortcuts(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('shortcutsPopup');
+  const btn   = document.getElementById('edInfoBtn');
+  if (!popup || !btn) return;
+  const rect = btn.getBoundingClientRect();
+  popup.style.right = (window.innerWidth - rect.right) + 'px';
+  popup.style.top   = (rect.bottom + window.scrollY + 6) + 'px';
+  popup.classList.toggle('open');
+  const close = (ev) => { if (!popup.contains(ev.target)) { popup.classList.remove('open'); document.removeEventListener('click', close); } };
+  setTimeout(() => document.addEventListener('click', close), 80);
+}
+
+function edZoom(z) {
+  const prev = ED.zoom;
+  ED.zoom = Math.max(1, Math.min(20, z));
+  const viewDur = ED.duration / ED.zoom;
+  ED.scrollOff = Math.max(0, Math.min(ED.curPos - viewDur/2, ED.duration - viewDur));
+  edUpdateZoomUI(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+}
+
+// ── Événements éditeur ────────────────────────────────────────────────────────
+(function initEditorEvents() {
+  const container = document.getElementById('waveContainer');
+  let dragStart = null, isDragging = false;
+
+  container.addEventListener('mousedown', (e) => {
+    if (!ED.buffer || e.button !== 0) return;
+    const rect = container.getBoundingClientRect();
+    const clickSec = Math.max(0, Math.min(edXToSec(e.clientX - rect.left, rect.width), ED.duration));
+    if (e.shiftKey && ED.inPoint !== null && ED.outPoint !== null) {
+      const i1 = Math.min(ED.inPoint, ED.outPoint); const i2 = Math.max(ED.inPoint, ED.outPoint);
+      let ep = clickSec <= i1 ? 'in' : (clickSec >= i2 ? 'out' : ((clickSec-i1)<(i2-clickSec)?'in':'out'));
+      const onMove = (ev) => {
+        const sec = Math.max(0, Math.min(edXToSec(ev.clientX - rect.left, rect.width), ED.duration));
+        if (ep === 'in') ED.inPoint = Math.min(sec, ED.outPoint - 0.01);
+        else ED.outPoint = Math.max(sec, ED.inPoint + 0.01);
+        ED.curPos = sec; edUpdateRegion(); edDrawWave();
+      };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+      return;
+    }
+    dragStart = clickSec; isDragging = false;
+    const onMove = (ev) => {
+      const sec = Math.max(0, Math.min(edXToSec(ev.clientX - rect.left, rect.width), ED.duration));
+      if (Math.abs(sec - dragStart) > 0.05) {
+        if (!isDragging) edPushUndo();
+        isDragging = true;
+        ED.inPoint = Math.min(dragStart, sec); ED.outPoint = Math.max(dragStart, sec);
+        ED.curPos = sec; edUpdateRegion(); edDrawWave();
+      }
+    };
+    const onUp = (ev) => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      if (!isDragging) {
+        const sec = Math.max(0, Math.min(edXToSec(ev.clientX - rect.left, rect.width), ED.duration));
+        ED.curPos = sec;
+        if (ED.playing) { edStop(); ED.curPos = sec; edPlayStop(); } else edUpdateCursor();
+      }
+      isDragging = false;
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  });
+
+  container.addEventListener('dblclick', (e) => {
+    if (!ED.buffer) return;
+    const rect = container.getBoundingClientRect();
+    const sec = Math.max(0, Math.min(edXToSec(e.clientX - rect.left, rect.width), ED.duration));
+    if (ED.playing) edStop();
+    ED.curPos = sec; edPlayStop();
+  });
+
+  let touchStartX = null, touchStartTime = null, lastTap = 0;
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) { touchStartX = e.touches[0].clientX; touchStartTime = Date.now(); }
+  }, { passive: true });
+  container.addEventListener('touchend', (e) => {
+    if (!ED.buffer) return;
+    if (e.changedTouches.length !== 1) return;
+    const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+    const dur = Date.now() - touchStartTime;
+    const now = Date.now();
+    if (dx < 10 && dur < 300) {
+      const rect = container.getBoundingClientRect();
+      const sec = Math.max(0, Math.min(edXToSec(e.changedTouches[0].clientX - rect.left, rect.width), ED.duration));
+      if (now - lastTap < 350) { if (ED.playing) edStop(); ED.curPos = sec; edPlayStop(); }
+      else { ED.curPos = sec; edUpdateCursor(); }
+      lastTap = now;
+    }
+  }, { passive: true });
+
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!ED.buffer) return;
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseSec = edXToSec(mouseX, rect.width);
+    ED.zoom = Math.max(1, Math.min(20, ED.zoom * (e.deltaY < 0 ? 1.15 : 0.87)));
+    const newViewDur = ED.duration / ED.zoom;
+    ED.scrollOff = Math.max(0, Math.min(mouseSec - (mouseX / rect.width) * newViewDur, ED.duration - newViewDur));
+    edUpdateZoomUI(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+    ED.userScrolled = true;
+  }, { passive: false });
+
+  function setZoomFromTrack(e) {
+    const rect = document.getElementById('waveZoomTrack').getBoundingClientRect();
+    const x = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+    edZoom(1 + x * 19);
+  }
+  document.getElementById('waveZoomTrack').addEventListener('click', setZoomFromTrack);
+  document.getElementById('waveZoomTrack').addEventListener('mousedown', (e) => {
+    setZoomFromTrack(e);
+    const mv = (ev) => setZoomFromTrack(ev);
+    const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  });
+
+  const thumb = document.getElementById('waveScrollThumb');
+  let scrollDragX = null, scrollDragOff = null;
+  thumb.addEventListener('mousedown', (e) => {
+    scrollDragX = e.clientX; scrollDragOff = ED.scrollOff; e.preventDefault();
+    const move = (ev) => {
+      if (!ED.buffer) return;
+      const W = document.getElementById('waveScrollbar').offsetWidth;
+      const thumbW = Math.max(20, W / ED.zoom);
+      const maxOff = ED.duration - ED.duration / ED.zoom;
+      ED.scrollOff = Math.max(0, Math.min(scrollDragOff + ((ev.clientX - scrollDragX)/(W-thumbW))*maxOff, maxOff));
+      edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+      ED.userScrolled = true;
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
+
+  window.addEventListener('resize', () => {
+    if (!ED.buffer) return;
+    edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+  });
+})();
 
 
 // ══════════════════════════════════════════════════════════════════════════════
