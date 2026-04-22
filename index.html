@@ -27,31 +27,36 @@
       padding: 0.75rem 0.5rem 2rem;
     }
 
-    /* Mobile : retirer padding et border-radius pour plein écran */
+    /* Mobile : plein écran adaptatif */
     @media (max-width: 540px) {
+      html, body {
+        width: 100%;
+        overflow-x: hidden;
+      }
       body {
         padding: 0;
         background: #1a1c22;
+        align-items: stretch;
       }
       .shell {
-        max-width: 100% !important;
-        width: 100% !important;
+        max-width: 100vw !important;
+        width: 100vw !important;
+        min-width: 0 !important;
         border-radius: 0 !important;
         border-left: none !important;
         border-right: none !important;
         box-shadow: none !important;
       }
-      /* Potards plus grands sur mobile */
-      .knob-wrap { width: 100px !important; height: 100px !important; }
-      .knob-svg  { width: 100px !important; height: 100px !important; }
-      /* Transport de l'éditeur : wrap */
-      .transport { flex-wrap: wrap; }
-      /* Boutons pads antenne plus hauts */
-      .pad { height: 56px !important; font-size: 15px !important; }
-      /* Boutons action plus grands */
-      .btn { height: 50px !important; font-size: 13px !important; }
-      /* Timer fonts */
-      .timer-val { font-size: 24px !important; }
+      /* Empêcher tout débordement */
+      .body { padding: 10px 10px 16px !important; }
+      .knobs { gap: 6px !important; }
+      .knob-wrap { width: 116px !important; height: 116px !important; }
+      .knob-svg  { width: 116px !important; height: 116px !important; }
+      .transport { flex-wrap: wrap; gap: 5px !important; }
+      .pad { height: 54px !important; font-size: 14px !important; }
+      .btn { height: 48px !important; font-size: 12px !important; }
+      .timer-val { font-size: 22px !important; }
+      .actions { gap: 6px !important; }
     }
 
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
@@ -154,6 +159,11 @@
     }
     .pad-lac.pad-on .pad-dot { opacity: 1; }
 
+    .pad-stop-pending {
+      border-color: #f5a000 !important; color: #f5a000 !important;
+      background: #1a1200 !important;
+      animation: switch-glow 0.45s ease infinite alternate;
+    }
     .pad-switch {
       border-color: #f5a000 !important; color: #f5a000 !important;
       background: #1a1600 !important;
@@ -1004,12 +1014,18 @@
 
     <!-- filePrefix géré en JS uniquement -->
     <input type="hidden" id="filePrefix" value="onefm-capture"/>
+    <!-- Dossier de sauvegarde -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+      <div id="folderDisplay" style="flex:1;background:#12141c;border:1px solid #22252e;border-radius:5px;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:#505668;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Dossier par défaut (Téléchargements)</div>
+      <button onclick="pickFolder()" style="height:32px;padding:0 10px;border-radius:5px;border:1px solid #2e3240;background:#1a1c24;color:#7880a0;font-family:'IBM Plex Mono',monospace;font-size:8px;cursor:pointer;flex-shrink:0;">📁 Choisir</button>
+      <button onclick="clearFolder()" style="height:32px;padding:0 8px;border-radius:5px;border:1px solid #2e3240;background:#1a1c24;color:#506070;font-family:'IBM Plex Mono',monospace;font-size:8px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>
 
     <!-- Boutons action -->
     <div class="actions">
       <button class="btn capture" id="btnTrigger" onclick="triggerCapture()" disabled>⏺ Capturer <kbd>Ctrl+Space</kbd></button>
       <button class="btn"         id="btnStopCap" onclick="stopCapture()"    disabled>⏹ Stopper <kbd>Ctrl+Space</kbd></button>
-      <button class="btn full"    id="btnStop"    onclick="doStop()"  style="display:none">⏹ Arrêter le stream</button>
+      <!-- btnStop retiré — arrêt via re-clic sur le pad actif -->
       <!-- btnMute remplacé par bouton console dans le VU mètre -->
     </div>
 
@@ -1036,6 +1052,7 @@
         <div class="sc-row"><span class="sc-key">I</span><span class="sc-desc">Set IN</span></div>
         <div class="sc-row"><span class="sc-key">O</span><span class="sc-desc">Set OUT</span></div>
         <div class="sc-row"><span class="sc-key">X</span><span class="sc-desc">Effacer IN / OUT</span></div>
+        <div class="sc-row"><span class="sc-key">Del</span><span class="sc-desc">Supprimer la sélection</span></div>
         <div class="sc-row"><span class="sc-key">T</span><span class="sc-desc">Zoom +</span></div>
         <div class="sc-row"><span class="sc-key">R</span><span class="sc-desc">Zoom −</span></div>
         <div class="sc-row"><span class="sc-key">E</span><span class="sc-desc">Exporter sélection</span></div>
@@ -1071,6 +1088,7 @@
         <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
         <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
         <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
+        <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>🗑</button>
         <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection [E]" disabled>↓ Export</button>
         <span class="tr-region-time" id="trRegionTime"></span>
       </div>
@@ -1086,7 +1104,7 @@
 <div class="rename-overlay" id="renameDialog">
   <div class="rename-dialog">
     <div class="rename-title">Nommer le fichier</div>
-    <input class="rename-input" id="renameInput" type="text" placeholder="nom du fichier"/>
+    <input class="rename-input" id="renameInput" type="text" placeholder="nom du fichier" onkeydown="if(event.key==='Enter')renameConfirm()"/>
     <span class="rename-ext">.mp3</span>
     <div class="rename-btns">
       <button class="rename-btn" onclick="renameCancel()">Annuler</button>
@@ -1482,8 +1500,7 @@ function setStatus(cls, txt) {
 function log(t) { document.getElementById('logLine').textContent = t; }
 
 function showStreamControls(show) {
-  document.getElementById('btnStop').style.display = show ? 'flex' : 'none';
-  // btnMute est maintenant le bouton console dans le VU mètre (toujours visible)
+  // Le stop stream se fait via re-clic sur le pad actif
 }
 
 function setCapButtons(capEn, stopEn) {
@@ -1538,7 +1555,28 @@ function applyStream(key) {
 function selectStream(key) {
   if (!isBuffering) { applyStream(key); return; }
   const curKey = Object.keys(STREAMS).find(k => STREAMS[k] === currentStream);
-  if (key === curKey) return;
+
+  // ── Re-clic sur le pad actif → demande d'arrêt ──────────────────────────
+  if (key === curKey) {
+    if (pendingStop !== key) {
+      // Premier clic : orange + confirmation
+      pendingStop = key;
+      const btn = document.getElementById(key === 'onefm' ? 'btnOneFM' : 'btnLac');
+      btn.innerHTML = '<div class="pad-dot"></div>Arrêter ?';
+      btn.classList.add('pad-stop-pending');
+      stopTmt = setTimeout(() => {
+        pendingStop = null;
+        resetActivePad(key);
+      }, 3000);
+    } else {
+      // Deuxième clic : arrêter
+      clearTimeout(stopTmt); stopTmt = null; pendingStop = null;
+      doStop();
+    }
+    return;
+  }
+
+  // ── Clic sur l'autre pad → switch ───────────────────────────────────────
   if (pendingSwitch !== key) {
     cancelSwitch();
     pendingSwitch = key;
@@ -1550,6 +1588,17 @@ function selectStream(key) {
   }
   teardown();
   applyStream(key);
+}
+
+let pendingStop = null, stopTmt = null;
+
+function resetActivePad(key) {
+  const btn = document.getElementById(key === 'onefm' ? 'btnOneFM' : 'btnLac');
+  if (!btn) return;
+  btn.innerHTML = '<div class="pad-dot"></div>' + (key === 'onefm' ? 'ONE FM' : 'RADIO LAC');
+  btn.classList.remove('pad-stop-pending');
+  // Remettre pad-on
+  btn.classList.add('pad-on');
 }
 
 // ── Lame ───────────────────────────────────────────────────────────────────────
@@ -1769,7 +1818,7 @@ function encodeMp3(chunks) {
   return new Blob(data, { type: 'audio/mpeg' });
 }
 
-function finalize() {
+async function finalize() {
   isCapturing = false;
   if (recInterval) { clearInterval(recInterval); recInterval = null; }
   setCapButtons(false, false);
@@ -1792,11 +1841,7 @@ function finalize() {
       const ds = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const filename = prefix + '_' + ds + '.mp3';
       const sizekb = (blob.size / 1024).toFixed(0);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      // Révoquer l'URL blob après 60s (libère la mémoire tout en laissant le temps au DL)
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await downloadOrSave(blob, filename);
       const total = fmt(snapSec + rSec);
       const list = document.getElementById('filesList');
       // Garder max 10 items dans la liste
@@ -1844,6 +1889,7 @@ function teardown() {
   document.getElementById('btnOneFM').classList.remove('pad-on');
   document.getElementById('btnLac').classList.remove('pad-on');
   currentStream = null;
+  if (stopTmt) { clearTimeout(stopTmt); stopTmt = null; } pendingStop = null;
   const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
   try { if (streamAbort)     { streamAbort.abort();        streamAbort = null;    } } catch(e) {}
   try { if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; } } catch(e) {}
@@ -1958,6 +2004,10 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'R': e.preventDefault(); if (ED.buffer) edZoom(ED.zoom / 1.5); break;
     case 'X': e.preventDefault(); if (ED.buffer) edClearRegion(); break;
+    case 'DELETE':
+    case 'BACKSPACE':
+      if (ED.buffer && ED.inPoint !== null && ED.outPoint !== null) { e.preventDefault(); edDeleteRegion(); }
+      break;
     case 'E': e.preventDefault(); if (ED.buffer && ED.inPoint !== null && ED.outPoint !== null) edExport(); break;
   }
 });
@@ -2197,7 +2247,8 @@ function edPlayStop() {
   ED.source.connect(ED.audioCtx.destination);
 
   // Mémoriser la position de départ pour y revenir au Stop
-  const startPos = ED.curPos >= (ED.outPoint || ED.duration) ? (ED.inPoint || 0) : ED.curPos;
+  // Démarrer depuis la position courante du curseur, sauf si on est pile à la fin
+  const startPos = (ED.curPos >= ED.duration) ? (ED.inPoint || 0) : ED.curPos;
   ED.playOrigin   = startPos;
   ED.userScrolled = false; // reset scroll lock au play
   ED.startOff   = startPos;
@@ -2234,13 +2285,9 @@ function edStop() {
   ED.playing = false;
   if (ED.source) { try { ED.source.stop(); } catch(e) {} ED.source = null; }
   if (ED.rafId)  { cancelAnimationFrame(ED.rafId); ED.rafId = null; }
-  // Retour au point de départ de la lecture
-  if (ED.playOrigin !== undefined) {
-    ED.curPos    = ED.playOrigin;
-    ED.scrollOff = Math.max(0, Math.min(ED.playOrigin - (ED.duration / ED.zoom) / 2,
-                             ED.duration - ED.duration / ED.zoom));
-    ED.playOrigin = undefined;
-  }
+  // Garder la position courante de lecture (ne pas revenir au start)
+  // Garder la vue là où on est (ne pas scroller)
+  ED.playOrigin = undefined;
   autoDim(false); // retire dim quand lecture arrêtée
   const btn = document.getElementById('trPlay');
   btn.textContent = '▶'; btn.classList.remove('active');
@@ -2276,6 +2323,7 @@ function edSetEnd() {
 function edUpdateRegion() {
   const hasRegion = ED.inPoint !== null && ED.outPoint !== null;
   document.getElementById('trExport').disabled = !hasRegion;
+  const td = document.getElementById('trDelete'); if (td) td.disabled = !hasRegion;
   if (hasRegion) {
     const dur = Math.abs(ED.outPoint - ED.inPoint);
     document.getElementById('trRegionTime').textContent = fmtMs(dur);
@@ -2310,7 +2358,7 @@ function renameConfirm() {
   edDoExport(fname);
 }
 
-function edDoExport(fname) {
+async function edDoExport(fname) {
   if (ED.inPoint === null || ED.outPoint === null) return;
   const i1 = Math.min(ED.inPoint, ED.outPoint);
   const i2 = Math.max(ED.inPoint, ED.outPoint);
@@ -2623,6 +2671,102 @@ function toggleShortcuts(e) {
 function edClearRegion() {
   ED.inPoint = null; ED.outPoint = null;
   edUpdateRegion(); edDrawWave();
+}
+
+function edDeleteRegion() {
+  if (!ED.buffer || ED.inPoint === null || ED.outPoint === null) return;
+  const sr  = ED.buffer.sampleRate;
+  const ch  = ED.buffer.numberOfChannels;
+  const i1  = Math.min(ED.inPoint, ED.outPoint);
+  const i2  = Math.max(ED.inPoint, ED.outPoint);
+  const s1  = Math.floor(i1 * sr);
+  const s2  = Math.floor(i2 * sr);
+  const len = ED.buffer.length - (s2 - s1);
+  if (len <= 0) return;
+
+  const newBuf = ED.audioCtx.createBuffer(ch, len, sr);
+  for (let ci = 0; ci < ch; ci++) {
+    const src = ED.buffer.getChannelData(ci);
+    const dst = newBuf.getChannelData(ci);
+    dst.set(src.subarray(0, s1), 0);
+    dst.set(src.subarray(s2), s1);
+  }
+
+  if (ED.playing) edStop();
+  ED.buffer   = newBuf;
+  ED.duration = newBuf.duration;
+  ED.curPos   = Math.min(i1, ED.duration);
+  ED.inPoint  = null; ED.outPoint = null;
+  edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar(); edUpdateRegion();
+  edUpdateCursor();
+  log('Zone supprimée — ' + fmtMs(i2 - i1));
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DOSSIER DE SAUVEGARDE
+// ══════════════════════════════════════════════════════════════════════════════
+let dirHandle = null;
+
+// Restaurer le dossier mémorisé au chargement
+(async function restoreFolder() {
+  try {
+    const saved = localStorage.getItem('mog-save-folder-name');
+    if (saved) {
+      document.getElementById('folderDisplay').textContent = '📁 ' + saved;
+    }
+  } catch(e) {}
+})();
+
+async function pickFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('Votre navigateur ne supporte pas la sélection de dossier.\nLes fichiers seront téléchargés dans le dossier par défaut.');
+    return;
+  }
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const name = dirHandle.name;
+    localStorage.setItem('mog-save-folder-name', name);
+    document.getElementById('folderDisplay').textContent = '📁 ' + name;
+    log('Dossier : ' + name);
+  } catch(e) {
+    if (e.name !== 'AbortError') log('Erreur dossier : ' + e.message);
+  }
+}
+
+function clearFolder() {
+  dirHandle = null;
+  localStorage.removeItem('mog-save-folder-name');
+  document.getElementById('folderDisplay').textContent = 'Dossier par défaut (Téléchargements)';
+}
+
+async function saveToFolder(blob, filename) {
+  if (dirHandle) {
+    try {
+      const fh = await dirHandle.getFileHandle(filename, { create: true });
+      const w  = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+      return true;
+    } catch(e) {
+      log('Erreur écriture dossier, fallback DL : ' + e.message);
+    }
+  }
+  // Fallback : téléchargement classique
+  return false;
+}
+
+async function downloadOrSave(blob, filename) {
+  const saved = await saveToFolder(blob, filename);
+  if (!saved) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } else {
+    log('Sauvegardé dans le dossier : ' + filename);
+  }
 }
 
 
