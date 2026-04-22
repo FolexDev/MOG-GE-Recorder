@@ -1885,9 +1885,13 @@ function toggleMute() {
 
 // ── Teardown ──────────────────────────────────────────────────────────────────
 function teardown() {
-  // Retirer l'état actif des pads antenne
-  document.getElementById('btnOneFM').classList.remove('pad-on');
-  document.getElementById('btnLac').classList.remove('pad-on');
+  // Retirer tous les états des pads antenne
+  const bOF = document.getElementById('btnOneFM');
+  const bLC = document.getElementById('btnLac');
+  bOF.className = 'pad pad-onefm';
+  bLC.className = 'pad pad-lac';
+  bOF.innerHTML = '<div class="pad-dot"></div>ONE FM';
+  bLC.innerHTML = '<div class="pad-dot"></div>RADIO LAC';
   currentStream = null;
   if (stopTmt) { clearTimeout(stopTmt); stopTmt = null; } pendingStop = null;
   const rl = document.getElementById('recLed'); if (rl) rl.classList.remove('active');
