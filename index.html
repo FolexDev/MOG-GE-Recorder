@@ -578,9 +578,8 @@
 
     /* Transport */
     .transport {
-      display: flex; align-items: center; gap: 6px;
+      display: flex; flex-direction: column; gap: 6px;
       padding: 8px 10px;
-      flex-wrap: wrap;
     }
     .tr-time {
       font-family: 'IBM Plex Mono', monospace;
@@ -626,8 +625,16 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -2px 0 rgba(0,0,0,0.35), 0 0 8px rgba(245,160,0,0.1);
     }
     .tr-btn.export:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 14px rgba(245,160,0,0.25); }
-    .tr-group { display: flex; align-items: center; gap: 4px; }
-    .tr-sep { width: 1px; height: 20px; background: #1e2030; flex-shrink: 0; margin: 0 4px; }
+    .tr-btns-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .tr-times-row {
+      display: flex; align-items: center; gap: 8px;
+      padding-top: 5px; border-top: 1px solid #14161e; margin-top: 2px;
+    }
+    .tr-time-lbl {
+      font-family: 'IBM Plex Mono', monospace; font-size: 7px;
+      color: #404860; letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .tr-sep { width: 1px; height: 20px; background: #1e2030; flex-shrink: 0; margin: 0 2px; }
     .tr-region-time {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 8px; color: #505668; letter-spacing: 0.04em;
@@ -1083,29 +1090,27 @@
         <span class="wave-zoom-val" id="waveZoomVal">1×</span>
       </div>
       <div class="transport">
-        <!-- Groupe 1 : Navigation -->
-        <div class="tr-group">
+        <!-- Ligne 1 : tous les boutons -->
+        <div class="tr-btns-row">
+          <button class="tr-btn" id="trRewind"  onclick="edRewind()"        title="Début [D]">⏮</button>
+          <button class="tr-btn" id="trPlay"    onclick="edPlayStop()"      title="Play/Stop [Espace]">▶</button>
+          <div class="tr-sep"></div>
+          <button class="tr-btn set-start"      onclick="edSetStart()"      title="Set IN [I]">IN</button>
+          <button class="tr-btn set-end"        onclick="edSetEnd()"        title="Set OUT [O]">OUT</button>
+          <button class="tr-btn clear-region"   onclick="edClearRegion()"   title="Effacer IN/OUT [X]">✕</button>
+          <div class="tr-sep"></div>
+          <button class="tr-btn" id="trDelete"  onclick="edDeleteRegion()"  title="Supprimer [Del]" disabled>DEL</button>
+          <button class="tr-btn" id="trUndo"    onclick="edUndo()"          title="Annuler [Ctrl+Z]" disabled>Undo</button>
+          <div class="tr-sep"></div>
+          <button class="tr-btn export" id="trExport" onclick="edExport()"  title="Exporter [E]" disabled>↓ Export</button>
+        </div>
+        <!-- Ligne 2 : timings -->
+        <div class="tr-times-row">
+          <span class="tr-time-lbl">POS</span>
           <span class="tr-time" id="trTime">00:00.0</span>
-          <button class="tr-btn" id="trRewind"  onclick="edRewind()" title="Début [D]">⏮</button>
-          <button class="tr-btn" id="trPlay"    onclick="edPlayStop()" title="Play/Stop [Espace]">▶</button>
+          <span class="tr-time-lbl">SEL</span>
+          <span class="tr-region-time" id="trRegionTime">—</span>
         </div>
-        <div class="tr-sep"></div>
-        <!-- Groupe 2 : Points IN/OUT -->
-        <div class="tr-group">
-          <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
-          <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
-          <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
-          <span class="tr-region-time" id="trRegionTime"></span>
-        </div>
-        <div class="tr-sep"></div>
-        <!-- Groupe 3 : DEL / Undo -->
-        <div class="tr-group">
-          <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>DEL</button>
-          <button class="tr-btn" id="trUndo"   onclick="edUndo()"         title="Annuler [Ctrl+Z]" disabled>Undo</button>
-        </div>
-        <div class="tr-sep"></div>
-        <!-- Export seul -->
-        <button class="tr-btn export" onclick="edExport()" id="trExport" title="Exporter [E]" disabled>↓ Export</button>
       </div>
     </div>
 
@@ -1853,7 +1858,10 @@ async function finalize() {
     try {
       const blob = encodeMp3(allChunks);
       const prefix = currentStream ? currentStream.prefix : 'capture';
-      const ds = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const ds = (() => {
+        const now = new Date();
+        return now.toLocaleString('sv-SE', { timeZone: 'Europe/Zurich' }).replace(/[ :]/g, '-').replace(/[^0-9-]/g, '');
+      })();
       const filename = prefix + '_' + ds + '.mp3';
       const sizekb = (blob.size / 1024).toFixed(0);
       // Créer l'URL pour le lien DL dans la liste
@@ -2320,7 +2328,7 @@ function edUpdateRegion() {
 async function edExport() {
   if (ED.inPoint === null || ED.outPoint === null) return;
   const base = ED.filename.replace(/\.mp3$/i, '');
-  const ds   = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const ds   = (() => { const now = new Date(); return now.toLocaleString('sv-SE', { timeZone: 'Europe/Zurich' }).replace(/[ :]/g, '-').replace(/[^0-9-]/g, ''); })();
   document.getElementById('renameInput').value = base + '_edit_' + ds;
   document.getElementById('renameDialog').classList.add('open');
   setTimeout(() => { const inp = document.getElementById('renameInput'); inp.focus(); inp.select(); }, 80);
