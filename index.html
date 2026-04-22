@@ -27,8 +27,8 @@
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 0.75rem 0.5rem 2rem;
+      align-items: stretch;
+      padding: 0;
       width: 100%;
       max-width: 100%;
       overflow-x: hidden;
@@ -89,8 +89,8 @@
 
     /* ── Shell ── */
     .shell {
-      width: 100%;
-      max-width: 520px;
+      width: min(520px, 100%);
+      max-width: 100%;
       box-sizing: border-box;
       background: #1a1c22;
       border: 1px solid #32363f;
@@ -2812,6 +2812,40 @@ async function mixWithJingles(contentBuffer) {
   return outBuf;
 }
 
+
+// ── Forcer l'app à remplir l'écran sur mobile ─────────────────────────────────
+(function forceMobileScale() {
+  const shell = document.querySelector('.shell');
+  if (!shell) return;
+
+  function fit() {
+    const vw = window.innerWidth;
+    if (vw >= 540) {
+      shell.style.transform = '';
+      shell.style.transformOrigin = '';
+      shell.style.width = '';
+      shell.style.marginLeft = '';
+      return;
+    }
+    // Sur mobile : étirer le shell à la largeur de l'écran
+    shell.style.width = vw + 'px';
+    shell.style.maxWidth = vw + 'px';
+    shell.style.marginLeft = '0';
+    shell.style.marginRight = '0';
+    shell.style.borderRadius = '0';
+    shell.style.borderLeft = 'none';
+    shell.style.borderRight = 'none';
+    document.body.style.padding = '0';
+    document.body.style.margin = '0';
+    document.body.style.alignItems = 'stretch';
+    document.documentElement.style.overflowX = 'hidden';
+    document.body.style.overflowX = 'hidden';
+  }
+
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 100));
+})();
 
 </script>
 </body>
