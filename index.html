@@ -864,7 +864,10 @@
           <div class="header-title">MOG-GE Recorder</div>
         </div>
       </div>
-      <div class="enc-badge" id="encBadge">⏳ LOADING ENC</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
+        <div class="enc-badge" id="encBadge">⏳ LOADING ENC</div>
+        <div id="clock" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:#6878a0;letter-spacing:0.06em;">--:--:--</div>
+      </div>
     </div>
     <div class="header-sub" id="headerSub">Sélectionne un flux ci-dessous</div>
   </div>
@@ -1126,6 +1129,10 @@
     <div class="rename-title">Nommer le fichier</div>
     <input class="rename-input" id="renameInput" type="text" placeholder="nom du fichier" onkeydown="if(event.key==='Enter')renameConfirm()"/>
     <span class="rename-ext">.mp3</span>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0 12px;cursor:pointer;">
+      <input type="checkbox" id="useJingles" style="width:14px;height:14px;accent-color:#00b896;cursor:pointer;"/>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#6878a0;letter-spacing:0.06em;">IN/OUT Debrief</span>
+    </label>
     <div class="rename-btns">
       <button class="rename-btn" onclick="renameCancel()">Annuler</button>
       <button class="rename-btn confirm" onclick="renameConfirm()">Exporter</button>
@@ -2338,23 +2345,37 @@ function renameCancel() { document.getElementById('renameDialog').classList.remo
 function renameConfirm() {
   const rawName = document.getElementById('renameInput').value.trim();
   if (!rawName) return;
-  const fname = rawName.replace(/\.mp3$/i, '') + '.mp3';
+  const fname    = rawName.replace(/\.mp3$/i, '') + '.mp3';
+  const withJing = document.getElementById('useJingles').checked;
   document.getElementById('renameDialog').classList.remove('open');
-  edDoExport(fname);
+  edDoExport(fname, withJing);
 }
 
-async function edDoExport(fname) {
+async function edDoExport(fname, withJingles = false) {
   if (ED.inPoint === null || ED.outPoint === null) return;
   const i1 = Math.min(ED.inPoint, ED.outPoint);
   const i2 = Math.max(ED.inPoint, ED.outPoint);
   const sr = ED.buffer.sampleRate; const ch = ED.buffer.numberOfChannels;
   const s1 = Math.floor(i1 * sr); const s2 = Math.floor(i2 * sr); const len = s2 - s1;
-  const tmpBuf = ED.audioCtx.createBuffer(ch, len, sr);
-  for (let ci = 0; ci < ch; ci++) tmpBuf.copyToChannel(ED.buffer.getChannelData(ci).subarray(s1, s2), ci);
+  let exportBuf = ED.audioCtx.createBuffer(ch, len, sr);
+  for (let ci = 0; ci < ch; ci++) exportBuf.copyToChannel(ED.buffer.getChannelData(ci).subarray(s1, s2), ci);
+
+  // Mixer avec les jingles si demandé
+  if (withJingles) {
+    try {
+      exportBuf = await mixWithJingles(exportBuf);
+    } catch(e) {
+      setStatus('error', 'Erreur jingles: ' + e.message);
+      log('Erreur jingles: ' + e.message);
+      return;
+    }
+  }
+
   setStatus('done', 'Export MP3...');
   await new Promise(r => setTimeout(r, 20));
   try {
-    const L = tmpBuf.getChannelData(0); const R = ch > 1 ? tmpBuf.getChannelData(1) : L;
+    const L = exportBuf.getChannelData(0);
+    const R = exportBuf.numberOfChannels > 1 ? exportBuf.getChannelData(1) : L;
     const enc = new lamejs.Mp3Encoder(2, sr, BITRATE);
     const data = []; const CHUNK = 1152;
     for (let i = 0; i < L.length; i += CHUNK) {
@@ -2364,7 +2385,7 @@ async function edDoExport(fname) {
     const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
     const blob = new Blob(data, { type: 'audio/mpeg' });
     await downloadOrSave(blob, fname);
-    setStatus('done', 'Export — ' + (blob.size/1024).toFixed(0) + ' KB');
+    setStatus('done', 'Export' + (withJingles ? ' + jingles' : '') + ' — ' + (blob.size/1024).toFixed(0) + ' KB');
     log('Export → ' + fname);
   } catch(e) { setStatus('error', 'Erreur export: ' + e.message); }
 }
@@ -2660,6 +2681,98 @@ async function downloadOrSave(blob, filename) {
   } else {
     log('Sauvegardé dans le dossier : ' + filename);
   }
+}
+
+
+// ── Horloge temps réel (heure de Berne) ──────────────────────────────────────
+(function startClock() {
+  function tick() {
+    const now = new Date();
+    const time = now.toLocaleTimeString('fr-CH', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const el = document.getElementById('clock');
+    if (el) el.textContent = time;
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// JINGLES DEBRIEF — URLs raw GitHub + crossfades (secondes)
+// ══════════════════════════════════════════════════════════════════════════════
+const JINGLES = {
+  IN: {
+    url: 'https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/3d3cf0555f0c4b60c19947d926ae8f7fe330baca/Debrief%20IN.mp3',
+    offset: 0.41,  // le contenu démarre 0.41s après le début du jingle IN
+  },
+  OUT: {
+    url: 'https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/3d3cf0555f0c4b60c19947d926ae8f7fe330baca/Debrief%20OUT.mp3',
+    offset: 0.14,  // le jingle OUT démarre 0.14s avant la fin du contenu
+  },
+};
+
+async function fetchJingleBuffer(url, audioCtx) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Jingle fetch failed: ' + url);
+  const ab = await resp.arrayBuffer();
+  return await audioCtx.decodeAudioData(ab);
+}
+
+
+
+async function mixWithJingles(contentBuffer) {
+  const sr  = contentBuffer.sampleRate;
+  const ch  = contentBuffer.numberOfChannels;
+  const tmpCtx = new OfflineAudioContext(ch, 1, sr);
+
+  setStatus('done', 'Chargement des jingles...');
+  const [jinIN, jinOUT] = await Promise.all([
+    fetchJingleBuffer(JINGLES.IN.url,  tmpCtx),
+    fetchJingleBuffer(JINGLES.OUT.url, tmpCtx),
+  ]);
+
+  // Points de montage en samples
+  // JINGLES.IN.offset  = 0.41s → le contenu démarre à 0.41s dans le fichier final
+  //                              (le jingle IN joue déjà depuis 0.41s)
+  // JINGLES.OUT.offset = 0.14s → le jingle OUT démarre 0.14s avant la fin du contenu
+  const conStart  = Math.round(JINGLES.IN.offset  * sr); // début du contenu dans le mix
+  const outOffset = Math.round(JINGLES.OUT.offset * sr); // overlap jingle OUT / fin contenu
+
+  const lenIn   = jinIN.length;
+  const lenCon  = contentBuffer.length;
+  const lenOut  = jinOUT.length;
+
+  // Position de départ du jingle OUT dans le fichier final
+  const outStart = conStart + lenCon - outOffset;
+
+  // Longueur totale
+  const totalLen = Math.max(conStart + lenCon, outStart + lenOut, lenIn);
+  const outBuf   = new OfflineAudioContext(ch, totalLen, sr).createBuffer(ch, totalLen, sr);
+
+  for (let ci = 0; ci < ch; ci++) {
+    const out    = outBuf.getChannelData(ci);
+    const inCh   = Math.min(ci, jinIN.numberOfChannels  - 1);
+    const outCh  = Math.min(ci, jinOUT.numberOfChannels - 1);
+
+    // 1. Jingle IN — commence à 0, additionné
+    const inData = jinIN.getChannelData(inCh);
+    for (let i = 0; i < inData.length && i < totalLen; i++) out[i] += inData[i];
+
+    // 2. Contenu — commence à conStart, additionné
+    const conData = contentBuffer.getChannelData(ci);
+    for (let i = 0; i < conData.length && conStart + i < totalLen; i++) out[conStart + i] += conData[i];
+
+    // 3. Jingle OUT — commence à outStart, additionné
+    const outData = jinOUT.getChannelData(outCh);
+    for (let i = 0; i < outData.length && outStart + i < totalLen; i++) out[outStart + i] += outData[i];
+
+    // Normaliser pour éviter la saturation dans les zones d'overlap
+    for (let i = 0; i < totalLen; i++) {
+      if (out[i] >  1) out[i] =  1;
+      if (out[i] < -1) out[i] = -1;
+    }
+  }
+
+  return outBuf;
 }
 
 
