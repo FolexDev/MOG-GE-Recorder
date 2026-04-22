@@ -889,7 +889,7 @@
       <div class="mute-btn-wrap" style="display:flex;gap:6px;">
         <button class="dim-btn" id="btnDim" onclick="toggleDim()">
           <div class="dim-led" id="dimLed"></div>
-          <div class="dim-label">DIM<br>−15</div>
+          <div class="dim-label">DIM</div>
         </button>
         <button class="mute-btn" id="btnMuteConsole" onclick="toggleMute()">
           <div class="mute-led" id="muteLed"></div>
@@ -1977,13 +1977,14 @@ document.addEventListener('keydown', (e) => {
   // Raccourcis éditeur — ignorés si focus dans un input/select
   const tag = document.activeElement ? document.activeElement.tagName : '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-  // Ctrl+Z → Undo éditeur
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+  // Ctrl+Z → Undo éditeur (avant le return sur ctrlKey)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     if (ED.buffer) { e.preventDefault(); edUndo(); }
     return;
   }
+
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   // Enter/Escape dans le dialog de renommage
   if (document.getElementById('renameDialog').classList.contains('open')) {
@@ -2387,29 +2388,25 @@ async function edDoExport(fname) {
   }
 
   setStatus('done', 'Export MP3...');
-  setTimeout(() => {
-    try {
-      const L = tmpBuf.getChannelData(0);
-      const R = ch > 1 ? tmpBuf.getChannelData(1) : L;
-      const enc = new lamejs.Mp3Encoder(2, sr, BITRATE);
-      const data = [];
-      const CHUNK = 1152;
-      for (let i = 0; i < L.length; i += CHUNK) {
-        const e = enc.encodeBuffer(f32ToI16(L.subarray(i, i+CHUNK)), f32ToI16(R.subarray(i, i+CHUNK)));
-        if (e.length > 0) data.push(new Uint8Array(e));
-      }
-      const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
-      const blob = new Blob(data, { type: 'audio/mpeg' });
-      const url  = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download=fname;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      setStatus('done', 'Export — ' + (blob.size/1024).toFixed(0) + ' KB');
-      log('Export → ' + fname);
-    } catch(e) {
-      setStatus('error', 'Erreur export: ' + e.message);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  try {
+    const L = tmpBuf.getChannelData(0);
+    const R = ch > 1 ? tmpBuf.getChannelData(1) : L;
+    const enc = new lamejs.Mp3Encoder(2, sr, BITRATE);
+    const data = [];
+    const CHUNK = 1152;
+    for (let i = 0; i < L.length; i += CHUNK) {
+      const e = enc.encodeBuffer(f32ToI16(L.subarray(i, i+CHUNK)), f32ToI16(R.subarray(i, i+CHUNK)));
+      if (e.length > 0) data.push(new Uint8Array(e));
     }
-  }, 20);
+    const fl = enc.flush(); if (fl.length > 0) data.push(new Uint8Array(fl));
+    const blob = new Blob(data, { type: 'audio/mpeg' });
+    await downloadOrSave(blob, fname);
+    setStatus('done', 'Export — ' + (blob.size/1024).toFixed(0) + ' KB');
+    log('Export → ' + fname);
+  } catch(e) {
+    setStatus('error', 'Erreur export: ' + e.message);
+  }
 }
 
 // ── Événements éditeur ───────────────────────────────────────────────────────
@@ -2544,10 +2541,21 @@ async function edDoExport(fname) {
     }
   }, { passive: true });
 
-  // ── Wheel zoom (desktop) ──────────────────────────────────────────────────
+  // ── Wheel zoom centré sur la position de la souris ───────────────────────
   container.addEventListener('wheel', (e) => {
     e.preventDefault();
-    edZoom(ED.zoom * (e.deltaY < 0 ? 1.15 : 0.87));
+    if (!ED.buffer) return;
+    const rect    = container.getBoundingClientRect();
+    const mouseX  = e.clientX - rect.left;
+    const mouseSec = edXToSec(mouseX, rect.width); // position en secondes sous la souris
+    const oldZoom = ED.zoom;
+    const newZoom = Math.max(1, Math.min(20, ED.zoom * (e.deltaY < 0 ? 1.15 : 0.87)));
+    ED.zoom = newZoom;
+    // Recalculer scrollOff pour que mouseSec reste sous la souris
+    const newViewDur = ED.duration / newZoom;
+    ED.scrollOff = Math.max(0, Math.min(mouseSec - (mouseX / rect.width) * newViewDur, ED.duration - newViewDur));
+    edUpdateZoomUI(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+    ED.userScrolled = true;
   }, { passive: false });
 
   // ── Barre de zoom (slider) ────────────────────────────────────────────────
