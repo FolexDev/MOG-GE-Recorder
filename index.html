@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>MOG-GE Stream Recorder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
@@ -20,10 +20,38 @@
     body {
       background: #0c0d10;
       min-height: 100vh;
+      min-height: 100dvh; /* dynamic viewport height pour iOS */
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 1.5rem 1rem 3rem;
+      padding: 0.75rem 0.5rem 2rem;
+    }
+
+    /* Mobile : retirer padding et border-radius pour plein écran */
+    @media (max-width: 540px) {
+      body {
+        padding: 0;
+        background: #1a1c22;
+      }
+      .shell {
+        max-width: 100% !important;
+        width: 100% !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        box-shadow: none !important;
+      }
+      /* Potards plus grands sur mobile */
+      .knob-wrap { width: 100px !important; height: 100px !important; }
+      .knob-svg  { width: 100px !important; height: 100px !important; }
+      /* Transport de l'éditeur : wrap */
+      .transport { flex-wrap: wrap; }
+      /* Boutons pads antenne plus hauts */
+      .pad { height: 56px !important; font-size: 15px !important; }
+      /* Boutons action plus grands */
+      .btn { height: 50px !important; font-size: 13px !important; }
+      /* Timer fonts */
+      .timer-val { font-size: 24px !important; }
     }
 
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
@@ -549,31 +577,114 @@
       font-size: 11px; color: #c8cdd8;
       min-width: 70px; letter-spacing: 0.04em;
     }
+    /* Boutons transport style console rétro */
     .tr-btn {
-      height: 32px;
-      border-radius: 5px;
-      border: 1px solid #2e3240; background: #1a1c24;
-      color: #6878a0;
+      height: 34px; min-width: 34px;
+      border-radius: 4px;
+      border: 1px solid #2a2e3a;
+      background: linear-gradient(180deg, #1e2028 0%, #15171e 100%);
+      color: #7888b0;
       font-family: 'IBM Plex Mono', monospace; font-size: 9px;
       cursor: pointer; transition: all 0.08s;
       display: flex; align-items: center; justify-content: center;
       padding: 0 10px; gap: 5px;
       white-space: nowrap;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04),
+                  inset 0 -2px 0 rgba(0,0,0,0.35),
+                  0 2px 4px rgba(0,0,0,0.3);
+      position: relative; overflow: hidden;
     }
-    .tr-btn:hover  { background: #222530; color: #a0aac0; }
-    .tr-btn:active { transform: translateY(1px); }
-    .tr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .tr-btn.active { border-color: #00b896; color: #00b896; background: rgba(0,184,150,0.08); }
-    .tr-btn.set-start { border-color: rgba(0,184,150,0.4); color: #00b896; }
-    .tr-btn.set-end   { border-color: rgba(220,8,20,0.4);  color: #dc0814; }
-    .tr-btn.export    { border-color: #f5a000; color: #f5a000; background: rgba(245,160,0,0.07); }
-    .tr-btn.export:hover { background: rgba(245,160,0,0.14); }
+    .tr-btn::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 40%;
+      background: rgba(255,255,255,0.025);
+    }
+    .tr-btn:hover  { color: #a0b0cc; border-color: #3a4050; }
+    .tr-btn:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+    .tr-btn:disabled { opacity: 0.28; cursor: not-allowed; transform: none; }
+    .tr-btn.active {
+      background: linear-gradient(180deg, #0e1a18 0%, #091210 100%);
+      border-color: #00b896; color: #00b896;
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,0.3), 0 0 10px rgba(0,184,150,0.2);
+    }
+    .tr-btn.set-start { border-color: rgba(0,184,150,0.5); color: #00b896; }
+    .tr-btn.set-end   { border-color: rgba(220,8,20,0.5);  color: #dc0814; }
+    .tr-btn.clear-region { border-color: rgba(90,70,100,0.5); color: #907098; font-size: 8px; }
+    .tr-btn.export {
+      border-color: #c07800; color: #f5a000;
+      background: linear-gradient(180deg, #1a1500 0%, #110e00 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -2px 0 rgba(0,0,0,0.35), 0 0 8px rgba(245,160,0,0.1);
+    }
+    .tr-btn.export:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 14px rgba(245,160,0,0.25); }
     .tr-sep { flex: 1; }
     .tr-region-time {
       font-family: 'IBM Plex Mono', monospace;
-      font-size: 8px; color: #505668;
-      letter-spacing: 0.04em;
+      font-size: 8px; color: #505668; letter-spacing: 0.04em;
     }
+
+    /* DIM button */
+    .dim-btn {
+      width: 44px; height: 100%; min-height: 52px;
+      background: linear-gradient(180deg, #1e2028 0%, #16181e 100%);
+      border: 1px solid #2e3240; border-radius: 5px;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 5px;
+      padding: 6px 4px; transition: all 0.08s;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04),
+                  inset 0 -2px 0 rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
+      position: relative; overflow: hidden;
+    }
+    .dim-btn::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 40%; background: rgba(255,255,255,0.025); border-radius: 4px 4px 0 0;
+    }
+    .dim-btn:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+    .dim-led {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #1a1a2a; border: 1px solid #0a0a14;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); flex-shrink: 0; transition: all 0.1s;
+    }
+    .dim-label {
+      font-family: 'IBM Plex Mono', monospace; font-size: 6px; font-weight: 500;
+      color: #7888b0; letter-spacing: 0.08em; text-transform: uppercase;
+      text-align: center; line-height: 1.2; user-select: none;
+    }
+    .dim-btn.dimmed { background: linear-gradient(180deg, #181020 0%, #10081a 100%); border-color: #9060c0; }
+    .dim-btn.dimmed .dim-led {
+      background: #c080ff; border-color: #8040bb;
+      box-shadow: 0 0 8px rgba(192,128,255,0.9), 0 0 16px rgba(160,80,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+    .dim-btn.dimmed .dim-label { color: #c080ff; }
+
+    /* Infobulle raccourcis */
+    .editor-info-btn {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1px solid #2e3240; background: #1a1c24;
+      color: #506070; font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all 0.1s;
+    }
+    .editor-info-btn:hover { color: #00b896; border-color: #00b896; }
+    .shortcuts-popup {
+      position: fixed; z-index: 1000;
+      background: #141720; border: 1px solid #2e3240;
+      border-radius: 8px; padding: 10px 14px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.85);
+      display: none; min-width: 200px;
+    }
+    .shortcuts-popup.open { display: block; animation: popup-in 0.12s ease; }
+    .sc-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 0; border-bottom: 1px solid #1a1c22; gap: 16px;
+    }
+    .sc-row:last-child { border-bottom: none; }
+    .sc-key {
+      font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #00b896;
+      background: rgba(0,184,150,0.1); border: 1px solid rgba(0,184,150,0.25);
+      padding: 1px 6px; border-radius: 3px; flex-shrink: 0;
+    }
+    .sc-desc { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #6878a0; }
 
     /* ── Dialog rename export ── */
     .rename-overlay {
@@ -765,7 +876,11 @@
         </div>
         <div class="vu-ruler" id="vuRuler"></div>
       </div>
-      <div class="mute-btn-wrap">
+      <div class="mute-btn-wrap" style="display:flex;gap:6px;">
+        <button class="dim-btn" id="btnDim" onclick="toggleDim()">
+          <div class="dim-led" id="dimLed"></div>
+          <div class="dim-label">DIM<br>−15</div>
+        </button>
         <button class="mute-btn" id="btnMuteConsole" onclick="toggleMute()">
           <div class="mute-led" id="muteLed"></div>
           <div class="mute-label">MUTE</div>
@@ -912,6 +1027,19 @@
       <div class="editor-title">
         <span>ÉDITEUR</span>
         <span class="editor-filename" id="editorFilename">—</span>
+        <button class="editor-info-btn" id="edInfoBtn" onclick="toggleShortcuts(event)" title="Raccourcis">i</button>
+      </div>
+      <!-- Popup raccourcis -->
+      <div class="shortcuts-popup" id="shortcutsPopup">
+        <div class="sc-row"><span class="sc-key">Espace</span><span class="sc-desc">Play / Stop</span></div>
+        <div class="sc-row"><span class="sc-key">D</span><span class="sc-desc">Retour au début</span></div>
+        <div class="sc-row"><span class="sc-key">I</span><span class="sc-desc">Set IN</span></div>
+        <div class="sc-row"><span class="sc-key">O</span><span class="sc-desc">Set OUT</span></div>
+        <div class="sc-row"><span class="sc-key">X</span><span class="sc-desc">Effacer IN / OUT</span></div>
+        <div class="sc-row"><span class="sc-key">T</span><span class="sc-desc">Zoom +</span></div>
+        <div class="sc-row"><span class="sc-key">R</span><span class="sc-desc">Zoom −</span></div>
+        <div class="sc-row"><span class="sc-key">E</span><span class="sc-desc">Exporter sélection</span></div>
+        <div class="sc-row"><span class="sc-key">Ctrl+Space</span><span class="sc-desc">Capturer stream</span></div>
       </div>
       <div class="wave-timecodes"><canvas id="waveTimecode"></canvas></div>
       <div class="waveform-container" id="waveContainer">
@@ -940,9 +1068,10 @@
         <button class="tr-btn" id="trRewind"  onclick="edRewind()" title="Début">⏮</button>
         <button class="tr-btn" id="trPlay"    onclick="edPlayStop()" title="Play/Stop">▶</button>
         <div class="tr-sep"></div>
-        <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN">IN</button>
-        <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT">OUT</button>
-        <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection" disabled>↓ Export</button>
+        <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
+        <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
+        <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
+        <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection [E]" disabled>↓ Export</button>
         <span class="tr-region-time" id="trRegionTime"></span>
       </div>
     </div>
@@ -1062,12 +1191,25 @@ function paintVU(rL, rR) {
   [['vuL', rmsToSeg(rL)], ['vuR', rmsToSeg(rR)]].forEach(([id, n]) => {
     const segs = document.getElementById(id).children;
     for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      // Toujours effacer les styles inline (résidu dim)
+      seg.style.background = '';
+      seg.style.boxShadow  = '';
       if (i < n) {
-        segs[i].classList.add('lit');
-        segs[i].classList.toggle('muted', isMuted);
+        seg.classList.add('lit');
+        if (isMuted) {
+          seg.classList.add('muted');
+        } else {
+          seg.classList.remove('muted');
+          if (isDimmed) {
+            // Orange dim via style inline (pas de classe pour éviter !important)
+            seg.style.background = '#c080ff';
+            seg.style.boxShadow  = '0 0 4px rgba(192,128,255,0.55)';
+          }
+        }
       } else {
-        segs[i].classList.remove('lit');
-        segs[i].classList.remove('muted');
+        seg.classList.remove('lit');
+        seg.classList.remove('muted');
       }
     }
   });
@@ -1155,17 +1297,49 @@ knobSetDUR(0);
     }
 
     // Touch
+    let _lastTap = 0;
     wrap.addEventListener('touchstart', (e) => {
-      startY   = e.touches[0].clientY;
-      startIdx = curIdx();
-      e.preventDefault(); // bloque swipe iOS
+      if (e.touches.length === 1) {
+        startY   = e.touches[0].clientY;
+        startIdx = curIdx();
+      }
+      e.preventDefault();
     }, { passive: false });
     wrap.addEventListener('touchmove', (e) => {
-      e.preventDefault(); // bloque le scroll pendant le drag
+      e.preventDefault();
       const dy   = e.touches[0].clientY - startY;
       const step = Math.round(-dy / STEP_PX);
       const ni   = Math.max(0, Math.min(opts.length-1, startIdx + step));
       if (ni !== curIdx()) { sel.value = String(opts[ni]); setFn(ni); }
+    }, { passive: false });
+    wrap.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - _lastTap < 350) {
+        // Double-tap → ouvrir popup
+        e.preventDefault();
+        const popup = document.getElementById(popupId);
+        if (!popup) return;
+        const rect = wrap.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top  = (rect.bottom + window.scrollY + 8) + 'px';
+        popup.querySelectorAll('.knob-popup-item').forEach(item => {
+          item.classList.toggle('selected', item.dataset.val === sel.value);
+        });
+        popup.classList.add('open');
+        function onItem(ev) {
+          const val = ev.currentTarget.dataset.val;
+          sel.value = val;
+          const ni = opts.indexOf(parseInt(val));
+          if (ni >= 0) setFn(ni);
+          popup.querySelectorAll('.knob-popup-item').forEach(i => i.classList.toggle('selected', i.dataset.val === val));
+          closePopup();
+        }
+        popup.querySelectorAll('.knob-popup-item').forEach(item => item.addEventListener('click', onItem, { once: true }));
+        function closePopup() { popup.classList.remove('open'); document.removeEventListener('touchstart', outside); }
+        function outside(ev) { if (!popup.contains(ev.target) && !wrap.contains(ev.target)) closePopup(); }
+        setTimeout(() => document.addEventListener('touchstart', outside, { passive: true }), 80);
+      }
+      _lastTap = now;
     }, { passive: false });
 
     // Double-clic → popup stylée
@@ -1653,6 +1827,12 @@ function finalize() {
 function toggleMute() {
   if (!isBuffering) return;
   isMuted = !isMuted;
+  if (isMuted && isDimmed) {
+    // Désactiver dim si on active mute
+    isDimmed = false;
+    dimManual = false;
+    applyDim();
+  }
   if (monitorGain) monitorGain.gain.value = isMuted ? 0 : 1.0;
   const btn = document.getElementById('btnMuteConsole');
   if (btn) isMuted ? btn.classList.add('muted') : btn.classList.remove('muted');
@@ -1759,8 +1939,25 @@ document.addEventListener('keydown', (e) => {
     case ' ': e.preventDefault(); if (ED.buffer) edPlayStop();  break;
     case 'I': e.preventDefault(); if (ED.buffer) edSetStart();  break;
     case 'O': e.preventDefault(); if (ED.buffer) edSetEnd();    break;
-    case 'T': e.preventDefault(); if (ED.buffer) edZoom(ED.zoom * 1.5); break;
+    case 'T': e.preventDefault();
+      if (ED.buffer) {
+        // Si sélection IN/OUT, zoomer dessus; sinon zoom simple
+        if (ED.inPoint !== null && ED.outPoint !== null) {
+          const i1 = Math.min(ED.inPoint, ED.outPoint);
+          const i2 = Math.max(ED.inPoint, ED.outPoint);
+          const dur = i2 - i1;
+          if (dur > 0) {
+            ED.zoom = Math.min(20, ED.duration / dur);
+            ED.scrollOff = Math.max(0, i1 - dur * 0.05);
+            edUpdateZoomUI(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+            break;
+          }
+        }
+        edZoom(ED.zoom * 1.5);
+      }
+      break;
     case 'R': e.preventDefault(); if (ED.buffer) edZoom(ED.zoom / 1.5); break;
+    case 'X': e.preventDefault(); if (ED.buffer) edClearRegion(); break;
     case 'E': e.preventDefault(); if (ED.buffer && ED.inPoint !== null && ED.outPoint !== null) edExport(); break;
   }
 });
@@ -2001,11 +2198,13 @@ function edPlayStop() {
 
   // Mémoriser la position de départ pour y revenir au Stop
   const startPos = ED.curPos >= (ED.outPoint || ED.duration) ? (ED.inPoint || 0) : ED.curPos;
-  ED.playOrigin = startPos; // ← position à restaurer au Stop
+  ED.playOrigin   = startPos;
+  ED.userScrolled = false; // reset scroll lock au play
   ED.startOff   = startPos;
   ED.startTime  = ED.audioCtx.currentTime;
   ED.source.start(0, startPos);
   ED.playing = true;
+  autoDim(true); // auto-dim si stream actif
 
   const btn = document.getElementById('trPlay');
   btn.textContent = '⏸'; btn.classList.add('active');
@@ -2042,6 +2241,7 @@ function edStop() {
                              ED.duration - ED.duration / ED.zoom));
     ED.playOrigin = undefined;
   }
+  autoDim(false); // retire dim quand lecture arrêtée
   const btn = document.getElementById('trPlay');
   btn.textContent = '▶'; btn.classList.remove('active');
   edUpdateCursor();
@@ -2152,74 +2352,160 @@ function edDoExport(fname) {
   }, 20);
 }
 
-// ── Click sur la waveform → déplacer le curseur ───────────────────────────────
+// ── Événements éditeur ───────────────────────────────────────────────────────
 (function initEditorEvents() {
   const container = document.getElementById('waveContainer');
   const zoomTrack = document.getElementById('waveZoomTrack');
-  const scrollbar = document.getElementById('waveScrollbar');
   const thumb     = document.getElementById('waveScrollThumb');
 
-  // Click waveform
-  function waveClick(e) {
+  // ── Drag-select (clic+drag pour sélection IN/OUT) ──────────────────────────
+  let dragStart = null, isDragging = false;
+
+  container.addEventListener('mousedown', (e) => {
+    if (!ED.buffer || e.button !== 0) return;
+    const rect = container.getBoundingClientRect();
+    const clickSec = Math.max(0, Math.min(edXToSec(e.clientX - rect.left, rect.width), ED.duration));
+
+    // ── Shift+drag : étendre IN ou OUT ──────────────────────────────────────
+    if (e.shiftKey && ED.inPoint !== null && ED.outPoint !== null) {
+      const i1 = Math.min(ED.inPoint, ED.outPoint);
+      const i2 = Math.max(ED.inPoint, ED.outPoint);
+      // Déterminer quel point modifier selon la position du curseur
+      let editPoint; // 'in' ou 'out'
+      if (clickSec <= i1) {
+        editPoint = 'in';
+      } else if (clickSec >= i2) {
+        editPoint = 'out';
+      } else {
+        // Dans la sélection : point le plus proche
+        editPoint = (clickSec - i1) < (i2 - clickSec) ? 'in' : 'out';
+      }
+
+      const onMove = (ev) => {
+        const x   = ev.clientX - rect.left;
+        const sec = Math.max(0, Math.min(edXToSec(x, rect.width), ED.duration));
+        if (editPoint === 'in') {
+          ED.inPoint = Math.min(sec, ED.outPoint - 0.01);
+        } else {
+          ED.outPoint = Math.max(sec, ED.inPoint + 0.01);
+        }
+        ED.curPos = sec;
+        edUpdateRegion(); edDrawWave();
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      return;
+    }
+
+    // ── Drag normal : créer une sélection ───────────────────────────────────
+    dragStart = clickSec;
+    isDragging = false;
+
+    const onMove = (ev) => {
+      const x   = ev.clientX - rect.left;
+      const sec = Math.max(0, Math.min(edXToSec(x, rect.width), ED.duration));
+      const d   = Math.abs(sec - dragStart);
+      if (d > 0.05) {
+        isDragging = true;
+        ED.inPoint  = Math.min(dragStart, sec);
+        ED.outPoint = Math.max(dragStart, sec);
+        ED.curPos   = sec;
+        edUpdateRegion(); edDrawWave();
+      }
+    };
+
+    const onUp = (ev) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (!isDragging) {
+        const x   = ev.clientX - rect.left;
+        const sec = Math.max(0, Math.min(edXToSec(x, rect.width), ED.duration));
+        ED.curPos  = sec;
+        if (ED.playing) {
+          edStop(); ED.curPos = sec; edPlayStop();
+        } else {
+          edUpdateCursor();
+        }
+      }
+      isDragging = false;
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // ── Double-clic → play depuis cet endroit ─────────────────────────────────
+  container.addEventListener('dblclick', (e) => {
     if (!ED.buffer) return;
     const rect = container.getBoundingClientRect();
-    const x    = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const sec  = edXToSec(x, rect.width);
-    ED.curPos  = Math.max(0, Math.min(sec, ED.duration));
-    if (ED.playing) {
-      edStop();
-      ED.curPos = Math.max(0, Math.min(sec, ED.duration));
-      edPlayStop();
-    }
-    edUpdateCursor();
-  }
-  container.addEventListener('click', waveClick);
-  container.addEventListener('touchend', (e) => { e.preventDefault(); waveClick(e); }, { passive: false });
+    const sec  = Math.max(0, Math.min(edXToSec(e.clientX - rect.left, rect.width), ED.duration));
+    const wasPlaying = ED.playing;
+    if (ED.playing) edStop();
+    ED.curPos = sec;
+    edPlayStop();
+  });
 
-  // Pinch-to-zoom (mobile)
-  let lastDist = null;
+  // ── Tap smartphone → déplacer curseur ────────────────────────────────────
+  let touchStartX = null, touchStartTime = null, lastTap = 0;
   container.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      lastDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-    }
-  }, { passive: true });
-  container.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && lastDist) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const delta = dist - lastDist;
-      lastDist = dist;
-      edZoom(ED.zoom + delta * 0.05);
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartTime = Date.now();
     }
   }, { passive: true });
 
-  // Wheel zoom
+  container.addEventListener('touchend', (e) => {
+    if (!ED.buffer) return;
+    if (e.changedTouches.length !== 1) return;
+    const dx       = Math.abs(e.changedTouches[0].clientX - touchStartX);
+    const duration = Date.now() - touchStartTime;
+    const now      = Date.now();
+
+    if (dx < 10 && duration < 300) {
+      if (now - lastTap < 350) {
+        // Double-tap → play depuis ici
+        const rect = container.getBoundingClientRect();
+        const sec  = Math.max(0, Math.min(edXToSec(e.changedTouches[0].clientX - rect.left, rect.width), ED.duration));
+        if (ED.playing) edStop();
+        ED.curPos = sec;
+        edPlayStop();
+      } else {
+        // Simple tap → déplacer curseur
+        const rect = container.getBoundingClientRect();
+        const sec  = Math.max(0, Math.min(edXToSec(e.changedTouches[0].clientX - rect.left, rect.width), ED.duration));
+        ED.curPos  = sec;
+        edUpdateCursor();
+      }
+      lastTap = now;
+    }
+  }, { passive: true });
+
+  // ── Wheel zoom (desktop) ──────────────────────────────────────────────────
   container.addEventListener('wheel', (e) => {
     e.preventDefault();
     edZoom(ED.zoom * (e.deltaY < 0 ? 1.15 : 0.87));
   }, { passive: false });
 
-  // Barre de zoom (slider)
+  // ── Barre de zoom (slider) ────────────────────────────────────────────────
   function setZoomFromTrack(e) {
-    const rect = zoomTrack.getBoundingClientRect();
+    const rect = document.getElementById('waveZoomTrack').getBoundingClientRect();
     const x    = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
     edZoom(1 + x * 19);
   }
-  zoomTrack.addEventListener('click', setZoomFromTrack);
-  zoomTrack.addEventListener('mousedown', (e) => {
+  document.getElementById('waveZoomTrack').addEventListener('click', setZoomFromTrack);
+  document.getElementById('waveZoomTrack').addEventListener('mousedown', (e) => {
     setZoomFromTrack(e);
-    const move = (ev) => setZoomFromTrack(ev);
-    const up   = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
-    document.addEventListener('mousemove', move);
+    const mv = (ev) => setZoomFromTrack(ev);
+    const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', mv);
     document.addEventListener('mouseup', up);
   });
 
-  // Scrollbar thumb drag
+  // ── Scrollbar thumb drag ──────────────────────────────────────────────────
   let scrollDragX = null, scrollDragOff = null;
   thumb.addEventListener('mousedown', (e) => {
     scrollDragX   = e.clientX;
@@ -2227,21 +2513,22 @@ function edDoExport(fname) {
     e.preventDefault();
     const move = (ev) => {
       if (!ED.buffer) return;
-      const bar   = document.getElementById('waveScrollbar');
-      const W     = bar.offsetWidth;
+      const bar    = document.getElementById('waveScrollbar');
+      const W      = bar.offsetWidth;
       const thumbW = Math.max(20, W / ED.zoom);
       const maxOff = ED.duration - ED.duration / ED.zoom;
       const dx     = ev.clientX - scrollDragX;
       const ratio  = dx / (W - thumbW);
       ED.scrollOff = Math.max(0, Math.min(scrollDragOff + ratio * maxOff, maxOff));
       edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+      ED.userScrolled = true; // l'utilisateur a scrollé manuellement
     };
     const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   });
-  
-  // Redessiner au resize
+
+  // Resize
   window.addEventListener('resize', () => {
     if (!ED.buffer) return;
     edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
@@ -2256,6 +2543,86 @@ function edZoom(z) {
   ED.scrollOff = Math.max(0, Math.min(ED.curPos - viewDur / 2, ED.duration - viewDur));
   edUpdateZoomUI();
   edDrawWave(); edDrawTimecode(); edUpdateScrollbar();
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DIM -15dB
+// ══════════════════════════════════════════════════════════════════════════════
+let isDimmed = false;
+let dimManual = false; // true si l'utilisateur a pressé DIM manuellement
+let dimGainNode = null;
+
+function initDimNode() {
+  if (!audioCtx) return;
+  if (!dimGainNode) {
+    dimGainNode = audioCtx.createGain();
+    dimGainNode.gain.value = 1.0;
+    // Reconnecter monitorGain → dimGainNode → destination
+    if (monitorGain) {
+      monitorGain.disconnect();
+      monitorGain.connect(dimGainNode);
+      dimGainNode.connect(audioCtx.destination);
+    }
+  }
+}
+
+function applyDim() {
+  initDimNode();
+  const btn = document.getElementById('btnDim');
+  if (dimGainNode) dimGainNode.gain.value = isDimmed ? Math.pow(10, -15/20) : 1.0;
+  if (btn) isDimmed ? btn.classList.add('dimmed') : btn.classList.remove('dimmed');
+  // Les couleurs VU sont gérées dans paintVU — forcer un redraw
+  paintVU(peakL, peakR);
+}
+
+function toggleDim() {
+  isDimmed = !isDimmed;
+  dimManual = isDimmed; // mémoriser l'intention manuelle
+  if (isDimmed && isMuted) {
+    // Désactiver mute si on active dim
+    isMuted = false;
+    if (monitorGain) monitorGain.gain.value = 1.0;
+    const bm = document.getElementById('btnMuteConsole');
+    if (bm) bm.classList.remove('muted');
+  }
+  applyDim();
+}
+
+// Auto-dim quand lecteur joue + stream actif non-muted
+function autoDim(play) {
+  if (dimManual) return; // l'utilisateur a pressé DIM manuellement → ne pas toucher
+  if (isBuffering && !isMuted) {
+    isDimmed = play;
+    applyDim();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INFOBULLE RACCOURCIS
+// ══════════════════════════════════════════════════════════════════════════════
+function toggleShortcuts(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('shortcutsPopup');
+  const btn   = document.getElementById('edInfoBtn');
+  if (!popup || !btn) return;
+  const rect  = btn.getBoundingClientRect();
+  popup.style.right = (window.innerWidth - rect.right) + 'px';
+  popup.style.top   = (rect.bottom + window.scrollY + 6) + 'px';
+  popup.classList.toggle('open');
+  const close = (ev) => {
+    if (!popup.contains(ev.target)) { popup.classList.remove('open'); document.removeEventListener('click', close); }
+  };
+  setTimeout(() => document.addEventListener('click', close), 80);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CLEAR IN/OUT
+// ══════════════════════════════════════════════════════════════════════════════
+function edClearRegion() {
+  ED.inPoint = null; ED.outPoint = null;
+  edUpdateRegion(); edDrawWave();
 }
 
 
