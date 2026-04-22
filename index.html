@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no"/>
   <title>MOG-GE Stream Recorder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
@@ -17,46 +17,68 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html {
+      overflow-x: hidden;
+      width: 100%;
+    }
     body {
       background: #0c0d10;
       min-height: 100vh;
-      min-height: 100dvh; /* dynamic viewport height pour iOS */
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 0.75rem 0.5rem 2rem;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
     }
 
     /* Mobile : plein écran adaptatif */
-    @media (max-width: 540px) {
-      html, body {
-        width: 100%;
-        overflow-x: hidden;
+    @media (max-width: 600px) {
+      html {
+        overflow-x: hidden !important;
+        width: 100% !important;
       }
       body {
-        padding: 0;
-        background: #1a1c22;
-        align-items: stretch;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #1a1c22 !important;
+        align-items: stretch !important;
+        overflow-x: hidden !important;
+        width: 100% !important;
       }
       .shell {
-        max-width: 100vw !important;
-        width: 100vw !important;
+        max-width: 100% !important;
+        width: 100% !important;
         min-width: 0 !important;
         border-radius: 0 !important;
         border-left: none !important;
         border-right: none !important;
         box-shadow: none !important;
+        overflow-x: hidden !important;
       }
-      /* Empêcher tout débordement */
-      .body { padding: 10px 10px 16px !important; }
-      .knobs { gap: 6px !important; }
-      .knob-wrap { width: 116px !important; height: 116px !important; }
-      .knob-svg  { width: 116px !important; height: 116px !important; }
-      .transport { flex-wrap: wrap; gap: 5px !important; }
-      .pad { height: 54px !important; font-size: 14px !important; }
-      .btn { height: 48px !important; font-size: 12px !important; }
-      .timer-val { font-size: 22px !important; }
-      .actions { gap: 6px !important; }
+      /* Intérieur */
+      .body { padding: 10px 10px 16px !important; overflow-x: hidden !important; }
+      /* Potards */
+      .knobs { gap: 4px !important; }
+      .knob-group { padding: 8px 4px !important; }
+      .knob-wrap { width: 100px !important; height: 100px !important; }
+      .knob-svg  { width: 100px !important; height: 100px !important; }
+      /* Boutons */
+      .pad  { height: 52px !important; font-size: 13px !important; }
+      .btn  { height: 46px !important; font-size: 12px !important; }
+      .btn kbd { font-size: 7px !important; }
+      .timer-val { font-size: 20px !important; }
+      .actions { gap: 5px !important; }
+      /* Transport éditeur */
+      .transport { gap: 4px !important; }
+      .tr-btns-row { gap: 4px !important; flex-wrap: wrap !important; }
+      .tr-btn { padding: 0 7px !important; font-size: 8px !important; }
+      /* Empêcher tout overflow interne */
+      * { max-width: 100% !important; }
+      canvas { max-width: 100% !important; }
     }
 
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
@@ -69,6 +91,7 @@
     .shell {
       width: 100%;
       max-width: 520px;
+      box-sizing: border-box;
       background: #1a1c22;
       border: 1px solid #32363f;
       border-radius: 12px;
@@ -2683,6 +2706,20 @@ async function downloadOrSave(blob, filename) {
   }
 }
 
+
+// ── Bloquer scroll horizontal sur mobile ────────────────────────────────────
+let _touchStartX = 0, _touchStartY = 0;
+document.addEventListener('touchstart', (e) => {
+  _touchStartX = e.touches[0].clientX;
+  _touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchmove', (e) => {
+  const dx = Math.abs(e.touches[0].clientX - _touchStartX);
+  const dy = Math.abs(e.touches[0].clientY - _touchStartY);
+  // Bloquer si mouvement principalement horizontal
+  if (dx > dy && dx > 8) e.preventDefault();
+}, { passive: false });
 
 // ── Horloge temps réel (heure de Berne) ──────────────────────────────────────
 (function startClock() {
