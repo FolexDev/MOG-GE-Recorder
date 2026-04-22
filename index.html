@@ -1053,6 +1053,7 @@
         <div class="sc-row"><span class="sc-key">O</span><span class="sc-desc">Set OUT</span></div>
         <div class="sc-row"><span class="sc-key">X</span><span class="sc-desc">Effacer IN / OUT</span></div>
         <div class="sc-row"><span class="sc-key">Del</span><span class="sc-desc">Supprimer la sélection</span></div>
+        <div class="sc-row"><span class="sc-key">Ctrl+Z</span><span class="sc-desc">Annuler (Undo)</span></div>
         <div class="sc-row"><span class="sc-key">T</span><span class="sc-desc">Zoom +</span></div>
         <div class="sc-row"><span class="sc-key">R</span><span class="sc-desc">Zoom −</span></div>
         <div class="sc-row"><span class="sc-key">E</span><span class="sc-desc">Exporter sélection</span></div>
@@ -1088,7 +1089,8 @@
         <button class="tr-btn set-start" onclick="edSetStart()" title="Set IN [I]">IN</button>
         <button class="tr-btn set-end"   onclick="edSetEnd()"   title="Set OUT [O]">OUT</button>
         <button class="tr-btn clear-region" onclick="edClearRegion()" title="Effacer IN/OUT [X]">✕</button>
-        <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>🗑</button>
+        <button class="tr-btn" id="trDelete" onclick="edDeleteRegion()" title="Supprimer la sélection [Del]" disabled>DEL</button>
+        <button class="tr-btn" id="trUndo" onclick="edUndo()" title="Annuler [Ctrl+Z]" disabled>Undo</button>
         <button class="tr-btn export"    onclick="edExport()" id="trExport" title="Exporter la sélection [E]" disabled>↓ Export</button>
         <span class="tr-region-time" id="trRegionTime"></span>
       </div>
@@ -1977,6 +1979,12 @@ document.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+  // Ctrl+Z → Undo éditeur
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    if (ED.buffer) { e.preventDefault(); edUndo(); }
+    return;
+  }
+
   // Enter/Escape dans le dialog de renommage
   if (document.getElementById('renameDialog').classList.contains('open')) {
     if (e.key === 'Enter')  { e.preventDefault(); renameConfirm(); }
@@ -2677,8 +2685,40 @@ function edClearRegion() {
   edUpdateRegion(); edDrawWave();
 }
 
+function edPushUndo() {
+  // Empiler l'état courant (buffer + positions)
+  if (!ED.undoStack) ED.undoStack = [];
+  ED.undoStack.push({
+    buffer:   ED.buffer,
+    duration: ED.duration,
+    curPos:   ED.curPos,
+    inPoint:  ED.inPoint,
+    outPoint: ED.outPoint,
+  });
+  if (ED.undoStack.length > 10) ED.undoStack.shift(); // max 10 niveaux
+  const tu = document.getElementById('trUndo');
+  if (tu) tu.disabled = false;
+}
+
+function edUndo() {
+  if (!ED.undoStack || !ED.undoStack.length) return;
+  const state = ED.undoStack.pop();
+  if (ED.playing) edStop();
+  ED.buffer   = state.buffer;
+  ED.duration = state.duration;
+  ED.curPos   = state.curPos;
+  ED.inPoint  = state.inPoint;
+  ED.outPoint = state.outPoint;
+  edBuildPeaks(); edDrawWave(); edDrawTimecode(); edUpdateScrollbar(); edUpdateRegion();
+  edUpdateCursor();
+  const tu = document.getElementById('trUndo');
+  if (tu) tu.disabled = !ED.undoStack.length;
+  log('Undo');
+}
+
 function edDeleteRegion() {
   if (!ED.buffer || ED.inPoint === null || ED.outPoint === null) return;
+  edPushUndo(); // sauvegarder avant modification
   const sr  = ED.buffer.sampleRate;
   const ch  = ED.buffer.numberOfChannels;
   const i1  = Math.min(ED.inPoint, ED.outPoint);
