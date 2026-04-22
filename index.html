@@ -1834,20 +1834,22 @@ async function finalize() {
   const rSec = recSec;
   captureSnapshot = []; capturePCM = [];
 
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       const blob = encodeMp3(allChunks);
       const prefix = currentStream ? currentStream.prefix : 'capture';
       const ds = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const filename = prefix + '_' + ds + '.mp3';
       const sizekb = (blob.size / 1024).toFixed(0);
+      // Créer l'URL pour le lien DL dans la liste
+      const url = URL.createObjectURL(blob);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      // Sauvegarder dans le dossier ou télécharger
       await downloadOrSave(blob, filename);
       const total = fmt(snapSec + rSec);
       const list = document.getElementById('filesList');
-      // Garder max 10 items dans la liste
       while (list.children.length >= 10) list.removeChild(list.lastChild);
       const item = document.createElement('div'); item.className = 'file-item';
-      // Stocker le blob sur l'élément pour l'éditeur
       const blobRef = blob;
       const fnRef   = filename;
       item.innerHTML = '<div style="cursor:pointer;flex:1" title="Ouvrir dans l&#39;éditeur"><div class="file-name">▶ '+filename+'</div><div class="file-meta">'+sizekb+' KB · '+total+' · MP3 44.1kHz 192kbps</div></div><a class="file-dl" href="'+url+'" download="'+filename+'" onclick="event.stopPropagation()">↓ DL</a>';
@@ -1856,13 +1858,11 @@ async function finalize() {
       setStatus('done', 'Clip prêt — '+(blob.size/1024/1024).toFixed(1)+' MB');
       log('Enregistré — '+filename+' ('+sizekb+' KB · '+total+')');
       document.getElementById('progressBar').style.width = '100%';
-      // Ouvrir automatiquement dans l'éditeur
       edOpen(blobRef, fnRef);
     } catch(err) {
       setStatus('error', 'Erreur encodage: '+err.message);
       log('Erreur: '+err.message);
     } finally {
-      // Réactiver Capturer seulement si le stream est toujours actif
       if (isBuffering) setCapButtons(true, false);
     }
   }, 50);
