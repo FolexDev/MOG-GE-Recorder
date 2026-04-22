@@ -4,19 +4,21 @@
   "description": "Stream Recorder One FM & Radio Lac",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0f0f0f",
-  "theme_color": "#0f0f0f",
+  "background_color": "#141518",
+  "theme_color": "#141518",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png",
+      "src": "One-Lac Shade Recorder.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "https://raw.githubusercontent.com/FolexDev/MOG-GE-Recorder/a6adc87ce61164d1dd35a00a4824bc7b7b917d33/One-Lac%20Shade%20Recorder.png",
+      "src": "One-Lac Shade Recorder.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
